@@ -11,12 +11,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { X, Upload, Plus, FileText, Package, Code } from "lucide-react"
+import { UploadButton } from "@/lib/uploadthing"
+import type { OurFileRouter } from "@/app/api/uploadthing/route"
 
 export default function UploadPage() {
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
-  const [files, setFiles] = useState<File[]>([])
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [longDescription, setLongDescription] = useState("")
+  const [uploaded, setUploaded] = useState<{ kind: string; key: string; name: string; type: string; size: number }[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [activeTab, setActiveTab] = useState("details")
 
   const handleAddTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
@@ -29,38 +35,32 @@ export default function UploadPage() {
     setTags(tags.filter((tag) => tag !== tagToRemove))
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(Array.from(e.target.files))
-    }
-  }
-
-  const handleRemoveFile = (fileToRemove: File) => {
-    setFiles(files.filter((file) => file !== fileToRemove))
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsUploading(true)
-
-    // Simulate upload
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          title, 
+          description, 
+          tags, 
+          assets: uploaded.map(u => ({
+            kind: u.kind as any,
+            fileKey: u.key,
+            fileName: u.name,
+            mime: u.type,
+            sizeBytes: u.size,
+          })) 
+        }),
+      })
+      if (!res.ok) throw new Error("Failed to create project")
+      const json = await res.json()
+      window.location.href = `/projects/${json.id}`
+    } catch (e) {
+      console.error(e)
       setIsUploading(false)
-      // Reset form or redirect
-    }, 2000)
-  }
-
-  const getFileIcon = (file: File) => {
-    const extension = file.name.split(".").pop()?.toLowerCase()
-
-    if (["py", "js", "cpp", "h", "c"].includes(extension || "")) {
-      return <Code className="h-5 w-5 text-purple-500" />
-    } else if (["obj", "fbx", "glb", "gltf"].includes(extension || "")) {
-      return <Package className="h-5 w-5 text-blue-500" />
-    } else if (["zip", "rar", "tar", "gz"].includes(extension || "")) {
-      return <Package className="h-5 w-5 text-green-500" />
-    } else {
-      return <FileText className="h-5 w-5 text-gray-500" />
     }
   }
 
@@ -69,7 +69,7 @@ export default function UploadPage() {
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Upload AR Project</h1>
 
-        <Tabs defaultValue="details">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-8">
             <TabsTrigger value="details">Project Details</TabsTrigger>
             <TabsTrigger value="files">Upload Files</TabsTrigger>
@@ -88,7 +88,13 @@ export default function UploadPage() {
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="title">Project Title</Label>
-                    <Input id="title" placeholder="Enter a descriptive title" required />
+                    <Input 
+                      id="title" 
+                      placeholder="Enter a descriptive title" 
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      required 
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -97,6 +103,8 @@ export default function UploadPage() {
                       id="description"
                       placeholder="Briefly describe your project (max 200 characters)"
                       maxLength={200}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
                       required
                     />
                   </div>
@@ -107,6 +115,8 @@ export default function UploadPage() {
                       id="longDescription"
                       placeholder="Provide a comprehensive description of your project, its features, and use cases"
                       className="min-h-[150px]"
+                      value={longDescription}
+                      onChange={(e) => setLongDescription(e.target.value)}
                       required
                     />
                   </div>
@@ -151,7 +161,7 @@ export default function UploadPage() {
                 </CardContent>
                 <CardFooter className="flex justify-between">
                   <Button variant="outline">Cancel</Button>
-                  <Button type="button" onClick={() => document.querySelector('[data-value="files"]')?.click()}>
+                  <Button type="button" onClick={() => setActiveTab("files")}>
                     Continue to Files
                   </Button>
                 </CardFooter>
@@ -169,35 +179,49 @@ export default function UploadPage() {
                 <CardContent className="space-y-6">
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                     <Upload className="h-10 w-10 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Drag and drop files here</h3>
-                    <p className="text-sm text-gray-500 mb-4">or click to browse your files</p>
-                    <Input type="file" multiple className="hidden" id="file-upload" onChange={handleFileChange} />
-                    <Button type="button" onClick={() => document.getElementById("file-upload")?.click()}>
-                      Select Files
-                    </Button>
+                    <h3 className="text-lg font-medium mb-2">Upload your files</h3>
+                    <p className="text-sm text-gray-500 mb-4">Select the type of file you want to upload</p>
+                    <div className="flex flex-wrap gap-4 justify-center">
+                      <UploadButton<OurFileRouter>
+                        endpoint="modelUploader"
+                        onClientUploadComplete={(res: any) => {
+                          const item = res?.[0]
+                          if (item) setUploaded((u) => [...u, { kind: "MODEL", key: item.key, name: item.name, type: item.type || "", size: item.size || 0 }])
+                        }}
+                        onUploadError={(e: Error) => console.error(e)}
+                      />
+                      <UploadButton<OurFileRouter>
+                        endpoint="scriptUploader"
+                        onClientUploadComplete={(res: any) => {
+                          const item = res?.[0]
+                          if (item) setUploaded((u) => [...u, { kind: "SCRIPT", key: item.key, name: item.name, type: item.type || "", size: item.size || 0 }])
+                        }}
+                        onUploadError={(e: Error) => console.error(e)}
+                      />
+                      <UploadButton<OurFileRouter>
+                        endpoint="configUploader"
+                        onClientUploadComplete={(res: any) => {
+                          const item = res?.[0]
+                          if (item) setUploaded((u) => [...u, { kind: "CONFIG", key: item.key, name: item.name, type: item.type || "", size: item.size || 0 }])
+                        }}
+                        onUploadError={(e: Error) => console.error(e)}
+                      />
+                    </div>
                   </div>
 
-                  {files.length > 0 && (
+                  {uploaded.length > 0 && (
                     <div className="mt-6">
-                      <h3 className="text-lg font-medium mb-3">Selected Files</h3>
+                      <h3 className="text-lg font-medium mb-3">Uploaded Files</h3>
                       <div className="space-y-2">
-                        {files.map((file, index) => (
+                        {uploaded.map((u, index) => (
                           <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
                             <div className="flex items-center">
-                              {getFileIcon(file)}
+                              {u.kind === "SCRIPT" ? <Code className="h-5 w-5 text-purple-500" /> : <Package className="h-5 w-5 text-blue-500" />}
                               <div className="ml-3">
-                                <p className="font-medium">{file.name}</p>
-                                <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+                                <p className="font-medium">{u.name}</p>
+                                <p className="text-xs text-gray-500">{(u.size / 1024).toFixed(1)} KB</p>
                               </div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRemoveFile(file)}
-                              className="text-gray-500 hover:text-red-500"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
                           </div>
                         ))}
                       </div>
@@ -205,10 +229,10 @@ export default function UploadPage() {
                   )}
                 </CardContent>
                 <CardFooter className="flex justify-between">
-                  <Button variant="outline" onClick={() => document.querySelector('[data-value="details"]')?.click()}>
+                  <Button variant="outline" onClick={() => setActiveTab("details")}>
                     Back
                   </Button>
-                  <Button type="button" onClick={() => document.querySelector('[data-value="preview"]')?.click()}>
+                  <Button type="button" onClick={() => setActiveTab("preview")}>
                     Continue to Preview
                   </Button>
                 </CardFooter>
@@ -227,10 +251,10 @@ export default function UploadPage() {
                       <h3 className="text-lg font-medium mb-2">Project Information</h3>
                       <div className="bg-gray-50 p-4 rounded-md">
                         <p className="text-sm text-gray-500 mb-1">Title</p>
-                        <p className="mb-3">Face Tracking AR Mask</p>
+                        <p className="mb-3">{title || "Not set"}</p>
 
                         <p className="text-sm text-gray-500 mb-1">Description</p>
-                        <p className="mb-3">A face tracking AR mask using OpenCV and 3D models</p>
+                        <p className="mb-3">{description || "Not set"}</p>
 
                         <p className="text-sm text-gray-500 mb-1">Tags</p>
                         <div className="flex flex-wrap gap-2">
@@ -247,12 +271,12 @@ export default function UploadPage() {
                     <div>
                       <h3 className="text-lg font-medium mb-2">Files</h3>
                       <div className="bg-gray-50 p-4 rounded-md">
-                        {files.length > 0 ? (
+                        {uploaded.length > 0 ? (
                           <ul className="space-y-1">
-                            {files.map((file, index) => (
+                            {uploaded.map((u, index) => (
                               <li key={index} className="flex items-center">
-                                {getFileIcon(file)}
-                                <span className="ml-2">{file.name}</span>
+                                {u.kind === "SCRIPT" ? <Code className="h-5 w-5 text-purple-500 mr-2" /> : <Package className="h-5 w-5 text-blue-500 mr-2" />}
+                                <span>{u.name}</span>
                               </li>
                             ))}
                           </ul>
@@ -264,7 +288,7 @@ export default function UploadPage() {
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-between">
-                  <Button variant="outline" onClick={() => document.querySelector('[data-value="files"]')?.click()}>
+                  <Button variant="outline" onClick={() => setActiveTab("files")}>
                     Back
                   </Button>
                   <Button type="submit" disabled={isUploading}>

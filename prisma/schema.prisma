@@ -1,0 +1,99 @@
+// Prisma schema for ARHub
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String?
+  name      String?
+  image     String?
+  role      Role      @default(USER)
+  plan      Plan      @default(FREE)
+  projects  Project[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Project {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  ownerId     String
+  owner       User        @relation(fields: [ownerId], references: [id])
+  visibility  Visibility  @default(PUBLIC)
+  tags        ProjectTag[]
+  assets      Asset[]
+  downloads   Download[]
+  stars       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Asset {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id])
+  kind      AssetKind
+  fileKey   String // S3 key
+  fileName  String
+  mime      String
+  sizeBytes Int
+}
+
+model Download {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  userId    String?
+  ipHash    String?
+  createdAt DateTime @default(now())
+}
+
+model Tag {
+  id       String       @id @default(cuid())
+  slug     String       @unique
+  name     String
+  projects ProjectTag[]
+}
+
+model ProjectTag {
+  projectId String
+  tagId     String
+  project   Project @relation(fields: [projectId], references: [id])
+  tag       Tag     @relation(fields: [tagId], references: [id])
+
+  @@id([projectId, tagId])
+}
+
+enum AssetKind {
+  MODEL
+  SCRIPT
+  CONFIG
+  PREVIEW
+}
+
+enum Visibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  CREATOR
+  PRO
+}
+

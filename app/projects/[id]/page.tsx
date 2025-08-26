@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -12,55 +12,59 @@ import { Canvas } from "@react-three/fiber"
 import { OrbitControls, PerspectiveCamera } from "@react-three/drei"
 import ModelViewer from "@/components/model-viewer"
 
-// Mock project data
-const project = {
-  id: 1,
-  title: "Face Tracking AR Mask",
-  description:
-    "A face tracking AR mask using OpenCV and 3D models. This project demonstrates how to create an augmented reality face mask that tracks facial movements in real-time.",
-  longDescription:
-    "This project uses OpenCV for face detection and tracking, combined with 3D models to create an interactive AR face mask. The system tracks facial landmarks in real-time and maps them to the 3D model, allowing for realistic movement and expressions. The project includes both the tracking scripts and the 3D models, making it easy to customize and extend.",
-  author: "ARDeveloper",
-  authorAvatar: "/placeholder.svg?height=50&width=50",
-  downloads: 1245,
-  views: 3890,
-  likes: 342,
-  dateCreated: "2023-05-15",
-  lastUpdated: "2023-11-22",
-  tags: ["Face Tracking", "3D Model", "OpenCV", "AR", "Facial Recognition"],
-  image: "/placeholder.svg?height=400&width=700",
-  files: [
-    { name: "face_tracking.py", type: "script", size: "45 KB" },
-    { name: "mask_model.obj", type: "3d", size: "2.3 MB" },
-    { name: "textures.zip", type: "archive", size: "4.7 MB" },
-    { name: "README.md", type: "document", size: "12 KB" },
-    { name: "requirements.txt", type: "document", size: "1 KB" },
-  ],
-  requirements: ["Python 3.8+", "OpenCV 4.5+", "NumPy", "PyTorch (optional for enhanced tracking)"],
-  instructions: [
-    "Download the project bundle",
-    "Install dependencies using pip install -r requirements.txt",
-    "Run python face_tracking.py to start the application",
-    "Press 'q' to quit the application",
-  ],
+type ApiProject = {
+  id: string
+  title: string
+  description: string
+  createdAt: string
+  updatedAt: string
+  owner: { id: string; name: string | null; image: string | null }
+  tags: { tag: { slug: string; name: string } }[]
+  assets: { id: string; kind: string; fileKey: string; fileName: string; mime: string; sizeBytes: number; url?: string | null }[]
 }
 
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
+  const [project, setProject] = useState<ApiProject | null>(null)
+  const [loading, setLoading] = useState(true)
   const [isDownloading, setIsDownloading] = useState(false)
 
-  const handleDownload = () => {
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/projects/${params.id}`)
+        if (!res.ok) throw new Error("Failed to load project")
+        const data = (await res.json()) as ApiProject
+        if (mounted) setProject(data)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [params.id])
+
+  const tagNames = useMemo(() => project?.tags?.map((t) => t.tag.name) ?? [], [project])
+  const modelAsset = useMemo(() => project?.assets?.find((a) => a.kind === "MODEL"), [project])
+  const files = project?.assets ?? []
+
+  const handleDownload = async () => {
     setIsDownloading(true)
-    // Simulate download
-    setTimeout(() => {
+    try {
+      await fetch(`/api/projects/${params.id}/download`, { method: "POST" })
+    } finally {
       setIsDownloading(false)
-    }, 2000)
+    }
   }
 
   return (
     <main className="container mx-auto px-4 py-12">
       <div className="mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-          <h1 className="text-3xl font-bold">{project.title}</h1>
+          <h1 className="text-3xl font-bold">{loading ? "Loading..." : project?.title ?? "Project"}</h1>
           <div className="flex gap-2 mt-4 md:mt-0">
             <Button onClick={handleDownload} disabled={isDownloading}>
               {isDownloading ? "Downloading..." : "Download Project"}
@@ -73,7 +77,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
-          {project.tags.map((tag) => (
+          {tagNames.map((tag) => (
             <Badge key={tag} variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-200">
               {tag}
             </Badge>
@@ -83,16 +87,16 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         <div className="flex items-center mb-6">
           <div className="relative h-10 w-10 rounded-full overflow-hidden mr-3">
             <Image
-              src={project.authorAvatar || "/placeholder.svg"}
-              alt={project.author}
+              src={"/placeholder.svg"}
+              alt={project?.owner?.name || "Owner"}
               fill
               className="object-cover"
             />
           </div>
           <div>
-            <p className="font-medium">{project.author}</p>
+            <p className="font-medium">{project?.owner?.name || "Unknown"}</p>
             <p className="text-sm text-gray-500">
-              Created: {project.dateCreated} • Updated: {project.lastUpdated}
+              Created: {project?.createdAt?.slice(0,10) || "-"} • Updated: {project?.updatedAt?.slice(0,10) || "-"}
             </p>
           </div>
         </div>
@@ -123,18 +127,18 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               <TabsTrigger value="instructions">Instructions</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="preview" className="mt-0">
-              <div className="bg-gray-100 rounded-lg overflow-hidden h-[400px] mb-6">
-                <Canvas>
-                  <PerspectiveCamera makeDefault position={[0, 0, 5]} />
-                  <ambientLight intensity={0.5} />
-                  <pointLight position={[10, 10, 10]} />
-                  <ModelViewer />
-                  <OrbitControls />
-                </Canvas>
-              </div>
-              <p className="text-gray-600">{project.description}</p>
-            </TabsContent>
+              <TabsContent value="preview" className="mt-0">
+                <div className="bg-gray-100 rounded-lg overflow-hidden h-[400px] mb-6">
+                  <Canvas>
+                    <PerspectiveCamera makeDefault position={[0, 0, 5]} />
+                    <ambientLight intensity={0.5} />
+                    <pointLight position={[10, 10, 10]} />
+                    <ModelViewer url={modelAsset?.url || undefined} />
+                    <OrbitControls />
+                  </Canvas>
+                </div>
+                <p className="text-gray-600">{project?.description}</p>
+              </TabsContent>
 
             <TabsContent value="description" className="mt-0">
               <div className="prose max-w-none">
@@ -156,20 +160,22 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               </div>
             </TabsContent>
 
-            <TabsContent value="files" className="mt-0">
+              <TabsContent value="files" className="mt-0">
               <div className="bg-white rounded-lg border p-4">
                 <h3 className="text-lg font-semibold mb-4">Project Files</h3>
                 <div className="space-y-3">
-                  {project.files.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                    {files.map((file) => (
+                      <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
                       <div className="flex items-center">
-                        {file.type === "script" && <Code className="h-5 w-5 text-purple-500 mr-3" />}
-                        {file.type === "3d" && <Package className="h-5 w-5 text-blue-500 mr-3" />}
-                        {file.type === "archive" && <Package className="h-5 w-5 text-green-500 mr-3" />}
-                        {file.type === "document" && <FileText className="h-5 w-5 text-gray-500 mr-3" />}
+                          {file.mime.includes("python") && <Code className="h-5 w-5 text-purple-500 mr-3" />}
+                          {file.mime.includes("gltf") || file.mime.includes("glb") ? (
+                            <Package className="h-5 w-5 text-blue-500 mr-3" />
+                          ) : (
+                            <FileText className="h-5 w-5 text-gray-500 mr-3" />
+                          )}
                         <div>
-                          <p className="font-medium">{file.name}</p>
-                          <p className="text-xs text-gray-500">{file.size}</p>
+                            <p className="font-medium">{file.fileName}</p>
+                            <p className="text-xs text-gray-500">{(file.sizeBytes / 1024).toFixed(1)} KB</p>
                         </div>
                       </div>
                       <Button variant="ghost" size="sm">
@@ -181,16 +187,10 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
               </div>
             </TabsContent>
 
-            <TabsContent value="instructions" className="mt-0">
+              <TabsContent value="instructions" className="mt-0">
               <div className="prose max-w-none">
                 <h3 className="text-xl font-semibold mb-4">How to Use This Project</h3>
-                <ol className="list-decimal pl-5 mb-6">
-                  {project.instructions.map((instruction, index) => (
-                    <li key={index} className="mb-2">
-                      {instruction}
-                    </li>
-                  ))}
-                </ol>
+                  <p className="text-gray-600">No instructions provided yet.</p>
                 <div className="bg-blue-50 p-4 rounded-md">
                   <h4 className="text-lg font-semibold mb-2 text-blue-800">Tips for Best Results</h4>
                   <ul className="list-disc pl-5 text-blue-800">

@@ -1,9 +1,11 @@
 import type React from "react"
 import "@/app/globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import AuthProvider from "@/components/auth-provider"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Upload, Search, User, Menu } from "lucide-react"
+import { Upload, Search, Menu } from "lucide-react"
+import UserMenu from "@/components/user-menu"
 import { Suspense } from "react"
 
 export default function RootLayout({
@@ -15,6 +17,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+          <AuthProvider>
           <div className="flex min-h-screen flex-col">
             <header className="border-b">
               <div className="container mx-auto px-4 py-4">
@@ -53,9 +56,7 @@ export default function RootLayout({
                     <Button variant="ghost" size="icon" className="md:hidden">
                       <Search className="h-5 w-5" />
                     </Button>
-                    <Button variant="ghost" size="icon">
-                      <User className="h-5 w-5" />
-                    </Button>
+                    <UserMenu />
                     <Button variant="ghost" size="icon" className="md:hidden">
                       <Menu className="h-5 w-5" />
                     </Button>
@@ -140,6 +141,7 @@ export default function RootLayout({
               </div>
             </footer>
           </div>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
