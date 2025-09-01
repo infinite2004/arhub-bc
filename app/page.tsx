@@ -2,7 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowRight, Upload, Eye, Download, Users, Code } from "lucide-react"
+import { ArrowRight, Upload, Eye, Download, Users, Code, Sparkles, Globe, Shield, Zap } from "lucide-react"
 import { prisma } from "@/lib/db"
 
 export default async function HomePage() {
@@ -31,62 +31,91 @@ export default async function HomePage() {
   return (
     <main className="flex-1">
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-blue-50 to-indigo-100 py-20">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            Share and Discover
-            <span className="text-blue-600"> AR Projects</span>
-          </h1>
-          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Upload your AR projects with 3D models and OpenCV scripts. Connect with developers, 
-            share your work, and discover amazing augmented reality experiences.
-          </p>
-          <div className="flex gap-4 justify-center">
-            <Link href="/upload">
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-                <Upload className="mr-2 h-5 w-5" />
-                Upload Project
-              </Button>
-            </Link>
-            <Link href="/projects">
-              <Button size="lg" variant="outline">
-                Explore Projects
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-            </Link>
+      <section className="relative bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-24 overflow-hidden">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="container mx-auto px-4 text-center relative z-10">
+          <div className="max-w-4xl mx-auto">
+            <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
+              <Sparkles className="h-4 w-4" />
+              The Ultimate AR Project Platform
+            </div>
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-gray-900 mb-8 leading-tight">
+              Share and Discover
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"> AR Projects</span>
+            </h1>
+            <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed">
+              Upload your AR projects with 3D models and OpenCV scripts. Connect with developers, 
+              share your work, and discover amazing augmented reality experiences.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+              <Link href="/upload">
+                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-lg px-8 py-6 h-auto">
+                  <Upload className="mr-3 h-6 w-6" />
+                  Upload Project
+                </Button>
+              </Link>
+              <Link href="/projects">
+                <Button size="lg" variant="outline" className="text-lg px-8 py-6 h-auto border-2">
+                  Explore Projects
+                  <ArrowRight className="ml-3 h-6 w-6" />
+                </Button>
+              </Link>
+            </div>
+            
+            {/* Trust indicators */}
+            <div className="flex flex-wrap justify-center items-center gap-8 text-sm text-gray-500">
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                <span>Secure & Reliable</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                <span>Global Community</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4" />
+                <span>Lightning Fast</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Stats Section */}
-      <section className="py-16 bg-white">
+      <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Platform Statistics</h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Join thousands of developers who are already sharing and discovering AR projects
+            </p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Card className="text-center">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-center mb-4">
+            <Card className="text-center border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <CardContent className="pt-8 pb-6">
+                <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Code className="h-8 w-8 text-blue-600" />
                 </div>
-                <h3 className="text-3xl font-bold text-gray-900 mb-2">{projectCount}</h3>
-                <p className="text-gray-600">AR Projects</p>
+                <h3 className="text-4xl font-bold text-gray-900 mb-2">{projectCount.toLocaleString()}</h3>
+                <p className="text-gray-600 font-medium">AR Projects</p>
               </CardContent>
             </Card>
-            <Card className="text-center">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-center mb-4">
+            <Card className="text-center border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <CardContent className="pt-8 pb-6">
+                <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Users className="h-8 w-8 text-green-600" />
                 </div>
-                <h3 className="text-3xl font-bold text-gray-900 mb-2">{userCount}</h3>
-                <p className="text-gray-600">Developers</p>
+                <h3 className="text-4xl font-bold text-gray-900 mb-2">{userCount.toLocaleString()}</h3>
+                <p className="text-gray-600 font-medium">Developers</p>
               </CardContent>
             </Card>
-            <Card className="text-center">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-center mb-4">
+            <Card className="text-center border-0 shadow-lg hover:shadow-xl transition-shadow duration-300">
+              <CardContent className="pt-8 pb-6">
+                <div className="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Download className="h-8 w-8 text-purple-600" />
                 </div>
-                <h3 className="text-3xl font-bold text-gray-900 mb-2">{downloadCount}</h3>
-                <p className="text-gray-600">Downloads</p>
+                <h3 className="text-4xl font-bold text-gray-900 mb-2">{downloadCount.toLocaleString()}</h3>
+                <p className="text-gray-600 font-medium">Downloads</p>
               </CardContent>
             </Card>
           </div>
@@ -94,46 +123,47 @@ export default async function HomePage() {
       </section>
 
       {/* Featured Projects */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-20 bg-gray-50">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl font-bold text-gray-900">Featured Projects</h2>
+          <div className="flex items-center justify-between mb-12">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Featured Projects</h2>
+              <p className="text-gray-600">Discover the most popular AR projects from our community</p>
+            </div>
             <Link href="/projects">
-              <Button variant="outline">
+              <Button variant="outline" className="group">
                 View All
-                <ArrowRight className="ml-2 h-4 w-4" />
+                <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
           </div>
           
           {featuredProjects.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {featuredProjects.map((project) => (
                 <Link key={project.id} href={`/projects/${project.id}`}>
-                  <Card className="h-full hover:shadow-lg transition-shadow duration-300">
-                    <CardHeader>
+                  <Card className="h-full hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 shadow-lg">
+                    <CardHeader className="pb-4">
                       <div className="flex items-start justify-between">
-                        <CardTitle className="text-lg line-clamp-2">{project.title}</CardTitle>
-                        <Badge variant="secondary" className="ml-2">
+                        <CardTitle className="text-lg line-clamp-2 text-gray-900">{project.title}</CardTitle>
+                        <Badge variant="secondary" className="ml-2 bg-blue-100 text-blue-700">
                           {project.assets.length} files
                         </Badge>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-gray-600 line-clamp-3 mb-4">{project.description}</p>
-                      <div className="flex items-center justify-between text-sm text-gray-500">
-                        <span>By {project.owner?.name || "Unknown"}</span>
-                        <div className="flex items-center gap-4">
-                          <span className="flex items-center">
-                            <Eye className="h-4 w-4 mr-1" />
-                            {project.downloads.length}
-                          </span>
+                      <p className="text-gray-600 line-clamp-3 mb-4 leading-relaxed">{project.description}</p>
+                      <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
+                        <span className="font-medium">By {project.owner?.name || "Unknown"}</span>
+                        <div className="flex items-center gap-1">
+                          <Eye className="h-4 w-4" />
+                          <span>{project.downloads.length}</span>
                         </div>
                       </div>
                       {project.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-3">
+                        <div className="flex flex-wrap gap-2">
                           {project.tags.slice(0, 3).map((tag) => (
-                            <Badge key={tag.tag.id} variant="outline" className="text-xs">
+                            <Badge key={tag.tag.id} variant="outline" className="text-xs bg-gray-50">
                               {tag.tag.name}
                             </Badge>
                           ))}
@@ -145,12 +175,19 @@ export default async function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Code className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-              <p className="text-gray-600 mb-4">Be the first to upload an AR project!</p>
+            <div className="text-center py-16">
+              <div className="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Code className="h-10 w-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">No projects yet</h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                Be the first to upload an AR project and inspire the community!
+              </p>
               <Link href="/upload">
-                <Button>Upload Your First Project</Button>
+                <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
+                  <Upload className="mr-2 h-5 w-5" />
+                  Upload Your First Project
+                </Button>
               </Link>
             </div>
           )}
@@ -158,39 +195,73 @@ export default async function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section className="py-16 bg-white">
+      <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-            Why Choose ARHub?
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              Why Choose ARHub?
+            </h2>
+            <p className="text-gray-600 max-w-2xl mx-auto text-lg">
+              Everything you need to share, discover, and collaborate on AR projects
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <div className="text-center group">
+              <div className="bg-blue-100 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
+                <Upload className="h-10 w-10 text-blue-600" />
+              </div>
+              <h3 className="text-xl font-semibold mb-4 text-gray-900">Easy Upload</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Upload your 3D models, scripts, and configs with our intuitive drag-and-drop interface. 
+                Support for multiple file formats and automatic validation.
+              </p>
+            </div>
+            <div className="text-center group">
+              <div className="bg-green-100 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
+                <Eye className="h-10 w-10 text-green-600" />
+              </div>
+              <h3 className="text-xl font-semibold mb-4 text-gray-900">3D Preview</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Preview your 3D models directly in the browser with our built-in viewer. 
+                Interactive controls and real-time rendering for the best experience.
+              </p>
+            </div>
+            <div className="text-center group">
+              <div className="bg-purple-100 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300">
+                <Users className="h-10 w-10 text-purple-600" />
+              </div>
+              <h3 className="text-xl font-semibold mb-4 text-gray-900">Community</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Connect with other AR developers, share your knowledge, and get feedback on your projects. 
+                Build your network in the AR community.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+            Ready to Share Your AR Project?
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Upload className="h-8 w-8 text-blue-600" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Easy Upload</h3>
-              <p className="text-gray-600">
-                Upload your 3D models, scripts, and configs with our intuitive interface.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Eye className="h-8 w-8 text-green-600" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">3D Preview</h3>
-              <p className="text-gray-600">
-                Preview your 3D models directly in the browser with our built-in viewer.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="h-8 w-8 text-purple-600" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Community</h3>
-              <p className="text-gray-600">
-                Connect with other AR developers and share your knowledge.
-              </p>
-            </div>
+          <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+            Join thousands of developers who are already sharing their amazing AR experiences
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/upload">
+              <Button size="lg" variant="secondary" className="text-lg px-8 py-6 h-auto">
+                <Upload className="mr-3 h-6 w-6" />
+                Start Uploading
+              </Button>
+            </Link>
+            <Link href="/projects">
+              <Button size="lg" variant="outline" className="text-lg px-8 py-6 h-auto border-white text-white hover:bg-white hover:text-blue-600">
+                Browse Projects
+                <ArrowRight className="ml-3 h-6 w-6" />
+              </Button>
+            </Link>
           </div>
         </div>
       </section>
