@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { X, Upload, Plus, FileText, Package, Code, AlertCircle, CheckCircle } from "lucide-react"
+import { X, Upload, Plus, FileText, Package, Code, AlertCircle, CheckCircle, Loader2, Trash2 } from "lucide-react"
 import { UploadButton } from "@/lib/uploadthing"
 import type { OurFileRouter } from "@/app/api/uploadthing/route"
 import { useRouter } from "next/navigation"
@@ -28,6 +28,7 @@ export default function UploadPage() {
   const [activeTab, setActiveTab] = useState("details")
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [uploadProgress, setUploadProgress] = useState<Record<string, string>>({})
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set())
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -47,8 +48,6 @@ export default function UploadPage() {
     } else if (description.length > 200) {
       newErrors.description = "Description must be less than 200 characters"
     }
-    
-
     
     if (uploaded.length === 0) {
       newErrors.files = "At least one file must be uploaded"
@@ -73,6 +72,16 @@ export default function UploadPage() {
   const handleRemoveTag = (tagToRemove: string) => {
     setTags(tags.filter((tag) => tag !== tagToRemove))
     setErrors({ ...errors, tags: "" })
+  }
+
+  const handleRemoveFile = (fileKey: string) => {
+    setUploaded(uploaded.filter(f => f.key !== fileKey))
+    setUploadProgress(prev => {
+      const newProgress = { ...prev }
+      delete newProgress[fileKey]
+      return newProgress
+    })
+    setErrors({ ...errors, files: "" })
   }
 
   const handleTabChange = (tab: string) => {
@@ -100,19 +109,19 @@ export default function UploadPage() {
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ 
-            title: title.trim(), 
-            description: description.trim(), 
-            visibility,
-            tags, 
-            assets: uploaded.map(u => ({
-              kind: u.kind as any,
-              fileKey: u.key,
-              fileName: u.name,
-              mime: u.type,
-              sizeBytes: u.size,
-            })) 
-          }),
+        body: JSON.stringify({ 
+          title: title.trim(), 
+          description: description.trim(), 
+          visibility,
+          tags, 
+          assets: uploaded.map(u => ({
+            kind: u.kind as any,
+            fileKey: u.key,
+            fileName: u.name,
+            mime: u.type,
+            sizeBytes: u.size,
+          })) 
+        }),
       })
       
       if (!res.ok) {
@@ -140,6 +149,11 @@ export default function UploadPage() {
         size: item.size || 0 
       }])
       setUploadProgress(prev => ({ ...prev, [item.key]: "Uploaded successfully" }))
+      setUploadingFiles(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(item.key)
+        return newSet
+      })
       setErrors({ ...errors, files: "" })
     }
   }
@@ -147,12 +161,51 @@ export default function UploadPage() {
   const handleUploadError = (error: Error, kind: string) => {
     console.error(error)
     setErrors({ ...errors, files: `Failed to upload ${kind.toLowerCase()} file` })
+    setUploadingFiles(prev => {
+      const newSet = new Set(prev)
+      // Remove any files that might be in progress for this kind
+      return newSet
+    })
+  }
+
+  const handleUploadBegin = (fileName: string) => {
+    setUploadingFiles(prev => new Set([...prev, fileName]))
+    setUploadProgress(prev => ({ ...prev, [fileName]: "Uploading..." }))
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const getFileIcon = (kind: string) => {
+    switch (kind) {
+      case "SCRIPT": return <Code className="h-5 w-5 text-purple-500" />
+      case "MODEL": return <Package className="h-5 w-5 text-blue-500" />
+      case "CONFIG": return <FileText className="h-5 w-5 text-green-500" />
+      default: return <FileText className="h-5 w-5 text-gray-500" />
+    }
+  }
+
+  const getFileTypeLabel = (kind: string) => {
+    switch (kind) {
+      case "SCRIPT": return "Script"
+      case "MODEL": return "3D Model"
+      case "CONFIG": return "Configuration"
+      default: return "File"
+    }
   }
 
   return (
     <main className="container mx-auto px-4 py-12">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Upload AR Project</h1>
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Upload AR Project</h1>
+          <p className="text-gray-600">Share your AR project with the community</p>
+        </div>
 
         {errors.submit && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md flex items-center gap-2">
@@ -162,10 +215,10 @@ export default function UploadPage() {
         )}
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="mb-8">
+          <TabsList className="mb-8 grid w-full grid-cols-3">
             <TabsTrigger value="details">Project Details</TabsTrigger>
             <TabsTrigger value="files">Upload Files</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
+            <TabsTrigger value="preview">Preview & Submit</TabsTrigger>
           </TabsList>
 
           <form onSubmit={handleSubmit}>
@@ -211,8 +264,6 @@ export default function UploadPage() {
                       <span>{description.length}/200</span>
                     </div>
                   </div>
-
-
 
                   <div className="space-y-2">
                     <Label htmlFor="visibility">Project Visibility</Label>
@@ -289,28 +340,43 @@ export default function UploadPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                    <Upload className="h-10 w-10 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Upload your files</h3>
-                    <p className="text-sm text-gray-500 mb-4">Select the type of file you want to upload</p>
-                    <div className="flex flex-wrap gap-4 justify-center">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                      <Package className="h-8 w-8 text-blue-500 mx-auto mb-3" />
+                      <h3 className="font-medium mb-2">3D Models</h3>
+                      <p className="text-sm text-gray-500 mb-3">Upload .glb, .gltf, .obj files</p>
                       <UploadButton<OurFileRouter>
                         endpoint="modelUploader"
                         onClientUploadComplete={(res: any) => handleFileUpload("MODEL", res)}
                         onUploadError={(e: Error) => handleUploadError(e, "Model")}
-                        onUploadBegin={() => setUploadProgress({})}
+                        onUploadBegin={() => handleUploadBegin("model")}
+                        className="w-full"
                       />
+                    </div>
+
+                    <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center hover:border-purple-400 transition-colors">
+                      <Code className="h-8 w-8 text-purple-500 mx-auto mb-3" />
+                      <h3 className="font-medium mb-2">Scripts</h3>
+                      <p className="text-sm text-gray-500 mb-3">Upload .py, .js, .ts files</p>
                       <UploadButton<OurFileRouter>
                         endpoint="scriptUploader"
                         onClientUploadComplete={(res: any) => handleFileUpload("SCRIPT", res)}
                         onUploadError={(e: Error) => handleUploadError(e, "Script")}
-                        onUploadBegin={() => setUploadProgress({})}
+                        onUploadBegin={() => handleUploadBegin("script")}
+                        className="w-full"
                       />
+                    </div>
+
+                    <div className="border-2 border-dashed border-green-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors">
+                      <FileText className="h-8 w-8 text-green-500 mx-auto mb-3" />
+                      <h3 className="font-medium mb-2">Config Files</h3>
+                      <p className="text-sm text-gray-500 mb-3">Upload .json, .yaml, .txt files</p>
                       <UploadButton<OurFileRouter>
                         endpoint="configUploader"
                         onClientUploadComplete={(res: any) => handleFileUpload("CONFIG", res)}
                         onUploadError={(e: Error) => handleUploadError(e, "Config")}
-                        onUploadBegin={() => setUploadProgress({})}
+                        onUploadBegin={() => handleUploadBegin("config")}
+                        className="w-full"
                       />
                     </div>
                   </div>
@@ -324,26 +390,41 @@ export default function UploadPage() {
 
                   {uploaded.length > 0 && (
                     <div className="mt-6">
-                      <h3 className="text-lg font-medium mb-3">Uploaded Files</h3>
-                      <div className="space-y-2">
+                      <h3 className="text-lg font-medium mb-3">Uploaded Files ({uploaded.length})</h3>
+                      <div className="space-y-3">
                         {uploaded.map((u, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                            <div className="flex items-center">
-                              {u.kind === "SCRIPT" ? <Code className="h-5 w-5 text-purple-500" /> : 
-                               u.kind === "MODEL" ? <Package className="h-5 w-5 text-blue-500" /> :
-                               <FileText className="h-5 w-5 text-green-500" />}
-                              <div className="ml-3">
+                          <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                            <div className="flex items-center flex-1">
+                              {getFileIcon(u.kind)}
+                              <div className="ml-3 flex-1">
                                 <p className="font-medium">{u.name}</p>
-                                <p className="text-xs text-gray-500">{(u.size / 1024).toFixed(1)} KB</p>
+                                <div className="flex items-center gap-4 text-sm text-gray-500">
+                                  <span>{getFileTypeLabel(u.kind)}</span>
+                                  <span>{formatFileSize(u.size)}</span>
+                                </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {uploadProgress[u.key] && (
+                            <div className="flex items-center gap-3">
+                              {uploadingFiles.has(u.key) ? (
+                                <div className="flex items-center gap-2 text-blue-600">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  <span className="text-sm">Uploading...</span>
+                                </div>
+                              ) : uploadProgress[u.key] ? (
                                 <span className="text-sm text-green-600 flex items-center gap-1">
                                   <CheckCircle className="h-4 w-4" />
                                   {uploadProgress[u.key]}
                                 </span>
-                              )}
+                              ) : null}
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveFile(u.key)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -369,50 +450,67 @@ export default function UploadPage() {
                   <CardDescription>Review your project details before submitting.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-6">
+                  <div className="space-y-8">
                     <div>
-                      <h3 className="text-lg font-medium mb-2">Project Information</h3>
-                      <div className="bg-gray-50 p-4 rounded-md">
-                        <p className="text-sm text-gray-500 mb-1">Title</p>
-                        <p className="mb-3">{title || "Not set"}</p>
+                      <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Project Information
+                      </h3>
+                      <div className="bg-gray-50 p-6 rounded-lg space-y-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 mb-1">Title</p>
+                          <p className="text-lg">{title || "Not set"}</p>
+                        </div>
 
-                        <p className="text-sm text-gray-500 mb-1">Short Description</p>
-                        <p className="mb-3">{description || "Not set"}</p>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 mb-1">Description</p>
+                          <p className="text-gray-700">{description || "Not set"}</p>
+                        </div>
 
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 mb-1">Visibility</p>
+                          <Badge variant={visibility === "PUBLIC" ? "default" : visibility === "UNLISTED" ? "secondary" : "outline"}>
+                            {visibility.toLowerCase()}
+                          </Badge>
+                        </div>
 
-
-                        <p className="text-sm text-gray-500 mb-1">Visibility</p>
-                        <p className="mb-3 capitalize">{visibility.toLowerCase()}</p>
-
-                        <p className="text-sm text-gray-500 mb-1">Tags</p>
-                        <div className="flex flex-wrap gap-2">
-                          {tags.map((tag) => (
-                            <Badge key={tag} variant="secondary">
-                              {tag}
-                            </Badge>
-                          ))}
-                          {tags.length === 0 && <p className="text-gray-400">No tags added</p>}
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 mb-2">Tags</p>
+                          <div className="flex flex-wrap gap-2">
+                            {tags.map((tag) => (
+                              <Badge key={tag} variant="secondary">
+                                {tag}
+                              </Badge>
+                            ))}
+                            {tags.length === 0 && <p className="text-gray-400">No tags added</p>}
+                          </div>
                         </div>
                       </div>
                     </div>
 
                     <div>
-                      <h3 className="text-lg font-medium mb-2">Files</h3>
-                      <div className="bg-gray-50 p-4 rounded-md">
+                      <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
+                        <Upload className="h-5 w-5" />
+                        Files ({uploaded.length})
+                      </h3>
+                      <div className="bg-gray-50 p-6 rounded-lg">
                         {uploaded.length > 0 ? (
-                          <ul className="space-y-1">
+                          <div className="space-y-3">
                             {uploaded.map((u, index) => (
-                              <li key={index} className="flex items-center">
-                                {u.kind === "SCRIPT" ? <Code className="h-5 w-5 text-purple-500 mr-2" /> : 
-                                 u.kind === "MODEL" ? <Package className="h-5 w-5 text-blue-500 mr-2" /> :
-                                 <FileText className="h-5 w-5 text-green-500 mr-2" />}
-                                <span>{u.name}</span>
-                                <span className="text-sm text-gray-500 ml-2">({(u.size / 1024).toFixed(1)} KB)</span>
-                              </li>
+                              <div key={index} className="flex items-center justify-between p-3 bg-white rounded-md border">
+                                <div className="flex items-center">
+                                  {getFileIcon(u.kind)}
+                                  <div className="ml-3">
+                                    <p className="font-medium">{u.name}</p>
+                                    <p className="text-sm text-gray-500">{getFileTypeLabel(u.kind)} • {formatFileSize(u.size)}</p>
+                                  </div>
+                                </div>
+                                <Badge variant="outline">{u.kind}</Badge>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         ) : (
-                          <p className="text-gray-400">No files uploaded</p>
+                          <p className="text-gray-400 text-center py-8">No files uploaded</p>
                         )}
                       </div>
                     </div>
@@ -422,8 +520,15 @@ export default function UploadPage() {
                   <Button variant="outline" onClick={() => setActiveTab("files")}>
                     Back
                   </Button>
-                  <Button type="submit" disabled={isUploading}>
-                    {isUploading ? "Creating Project..." : "Submit Project"}
+                  <Button type="submit" disabled={isUploading} className="min-w-[140px]">
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Submit Project"
+                    )}
                   </Button>
                 </CardFooter>
               </Card>
