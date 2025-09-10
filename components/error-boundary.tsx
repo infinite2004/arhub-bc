@@ -3,7 +3,8 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, RefreshCw, Home, Bug } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { AlertTriangle, RefreshCw, Home, Bug, Copy, Check, ExternalLink, Shield } from "lucide-react";
 
 interface Props {
   children: ReactNode;
@@ -17,6 +18,11 @@ interface State {
   error: Error | null;
   errorInfo: ErrorInfo | null;
   isRecovering: boolean;
+  errorId: string | null;
+  retryCount: number;
+  lastErrorTime: number | null;
+  isReporting: boolean;
+  reportCopied: boolean;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -27,6 +33,11 @@ export class ErrorBoundary extends Component<Props, State> {
       error: null,
       errorInfo: null,
       isRecovering: false,
+      errorId: null,
+      retryCount: 0,
+      lastErrorTime: null,
+      isReporting: false,
+      reportCopied: false,
     };
   }
 
@@ -34,6 +45,8 @@ export class ErrorBoundary extends Component<Props, State> {
     return {
       hasError: true,
       error,
+      errorId: `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      lastErrorTime: Date.now(),
     };
   }
 
@@ -76,12 +89,14 @@ export class ErrorBoundary extends Component<Props, State> {
       // Wait a bit to show recovery state
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      this.setState({
+      this.setState(prevState => ({
         hasError: false,
         error: null,
         errorInfo: null,
         isRecovering: false,
-      });
+        retryCount: prevState.retryCount + 1,
+        reportCopied: false,
+      }));
     } catch (error) {
       this.setState({ isRecovering: false });
       console.error("Failed to reset error boundary:", error);
@@ -92,23 +107,74 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.href = "/";
   };
 
-  handleReportError = () => {
-    const { error, errorInfo } = this.state;
+  handleReportError = async () => {
+    this.setState({ isReporting: true });
+    
+    const { error, errorInfo, errorId, retryCount } = this.state;
     const errorReport = {
+      id: errorId,
       message: error?.message,
       stack: error?.stack,
       componentStack: errorInfo?.componentStack,
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
       url: window.location.href,
+      retryCount,
+      version: process.env.NEXT_PUBLIC_APP_VERSION || 'unknown',
+      environment: process.env.NODE_ENV,
     };
 
-    // In production, send this to your error reporting service
-    console.log("Error Report:", errorReport);
+    try {
+      // In production, send this to your error reporting service
+      console.log("Error Report:", errorReport);
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(JSON.stringify(errorReport, null, 2));
+      this.setState({ reportCopied: true });
+      
+      // Send to error reporting service (example)
+      if (process.env.NODE_ENV === 'production') {
+        await fetch('/api/errors/report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(errorReport)
+        }).catch(err => console.warn('Failed to send error report:', err));
+      }
+      
+      // Reset copied state after 3 seconds
+      setTimeout(() => {
+        this.setState({ reportCopied: false });
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Failed to report error:', error);
+    } finally {
+      this.setState({ isReporting: false });
+    }
+  };
+
+  getErrorSeverity = (error: Error): 'low' | 'medium' | 'high' | 'critical' => {
+    const message = error.message.toLowerCase();
     
-    // For now, just copy to clipboard
-    navigator.clipboard.writeText(JSON.stringify(errorReport, null, 2));
-    alert("Error details copied to clipboard. Please report this to the development team.");
+    if (message.includes('network') || message.includes('fetch')) return 'medium';
+    if (message.includes('chunk') || message.includes('loading')) return 'low';
+    if (message.includes('memory') || message.includes('out of memory')) return 'critical';
+    if (message.includes('permission') || message.includes('unauthorized')) return 'high';
+    
+    return 'medium';
+  };
+
+  getErrorCategory = (error: Error): string => {
+    const message = error.message.toLowerCase();
+    
+    if (message.includes('network') || message.includes('fetch')) return 'Network';
+    if (message.includes('chunk') || message.includes('loading')) return 'Loading';
+    if (message.includes('memory')) return 'Memory';
+    if (message.includes('permission')) return 'Permission';
+    if (message.includes('syntax')) return 'Syntax';
+    if (message.includes('type')) return 'Type';
+    
+    return 'Unknown';
   };
 
   render() {
@@ -119,9 +185,20 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       // Default error UI
+      const { error, errorId, retryCount, isReporting, reportCopied } = this.state;
+      const severity = error ? this.getErrorSeverity(error) : 'medium';
+      const category = error ? this.getErrorCategory(error) : 'Unknown';
+      
+      const severityColors = {
+        low: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+        medium: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+        high: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+        critical: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+      };
+
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-lg">
             <CardHeader className="text-center">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900">
                 <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -132,6 +209,24 @@ export class ErrorBoundary extends Component<Props, State> {
               <CardDescription className="text-gray-600 dark:text-gray-400">
                 We encountered an unexpected error. Please try to recover or contact support if the problem persists.
               </CardDescription>
+              
+              {/* Error metadata */}
+              <div className="flex flex-wrap justify-center gap-2 mt-4">
+                <Badge variant="outline" className="text-xs">
+                  ID: {errorId}
+                </Badge>
+                <Badge className={severityColors[severity]}>
+                  {severity.toUpperCase()}
+                </Badge>
+                <Badge variant="secondary">
+                  {category}
+                </Badge>
+                {retryCount > 0 && (
+                  <Badge variant="outline">
+                    Retry #{retryCount}
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {process.env.NODE_ENV === "development" && this.state.error && (
@@ -176,15 +271,53 @@ export class ErrorBoundary extends Component<Props, State> {
                 </Button>
               </div>
               
-              <Button
-                onClick={this.handleReportError}
-                variant="ghost"
-                size="sm"
-                className="w-full"
-              >
-                <Bug className="mr-2 h-4 w-4" />
-                Report Error
-              </Button>
+              <div className="flex flex-col space-y-2">
+                <Button
+                  onClick={this.handleReportError}
+                  variant="ghost"
+                  size="sm"
+                  disabled={isReporting}
+                  className="w-full"
+                >
+                  {isReporting ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Reporting...
+                    </>
+                  ) : reportCopied ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Copied to Clipboard
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Report Error
+                    </>
+                  )}
+                </Button>
+                
+                <div className="flex space-x-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open('https://github.com/your-username/arhub-bc/issues', '_blank')}
+                    className="flex-1"
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    GitHub Issues
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open('mailto:support@arhub.com', '_blank')}
+                    className="flex-1"
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    Contact Support
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

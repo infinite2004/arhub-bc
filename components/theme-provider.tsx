@@ -6,6 +6,7 @@ import {
   type ThemeProviderProps,
 } from "next-themes";
 import { createContext, useContext, useEffect, useState } from "react";
+import { Sun, Moon, Monitor } from "lucide-react";
 
 interface ThemeContextType {
   theme: string;
@@ -117,9 +118,9 @@ export function ThemeToggle() {
   };
 
   const getThemeIcon = () => {
-    if (isSystem) return "🌐";
-    if (isLight) return "☀️";
-    return "🌙";
+    if (isSystem) return <Monitor className="h-4 w-4" />;
+    if (isLight) return <Sun className="h-4 w-4" />;
+    return <Moon className="h-4 w-4" />;
   };
 
   const getThemeLabel = () => {
@@ -131,10 +132,12 @@ export function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100 h-9 w-9"
+      className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-all duration-200 hover:bg-accent hover:text-accent-foreground h-9 w-9 group"
       title={`Switch to ${isSystem ? "light" : isLight ? "dark" : "system"} theme`}
     >
-      <span className="text-lg">{getThemeIcon()}</span>
+      <span className="group-hover:scale-110 transition-transform duration-200">
+        {getThemeIcon()}
+      </span>
       <span className="sr-only">Switch to {getThemeLabel()} theme</span>
     </button>
   );

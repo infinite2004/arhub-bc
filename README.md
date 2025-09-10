@@ -10,16 +10,44 @@ A modern, high-performance platform for AR/VR content creators and developers. B
 
 ## ✨ Features
 
+### Core Platform
 - **Modern Tech Stack**: Next.js 15, React 19, TypeScript 5
 - **3D Content Support**: WebGL, Three.js, React Three Fiber
 - **Authentication**: NextAuth.js with role-based access control
 - **Database**: PostgreSQL with Prisma ORM
-- **File Storage**: AWS S3 integration
+- **File Storage**: AWS S3 integration with UploadThing
 - **Real-time Features**: WebSocket support for live collaboration
-- **Performance Optimized**: Core Web Vitals, lazy loading, code splitting
+
+### Performance & Monitoring
+- **Performance Dashboard**: Real-time Core Web Vitals tracking
+- **Performance Budgets**: Automated performance monitoring and alerts
+- **Bundle Analysis**: Webpack bundle analyzer integration
+- **Memory Monitoring**: Heap memory usage tracking
+- **Optimization Suggestions**: Automated performance recommendations
+- **Caching Layer**: Redis + in-memory caching for optimal performance
+
+### User Experience
+- **Drag & Drop Upload**: Intuitive file upload with preview
+- **Loading States**: Comprehensive skeleton components and loading indicators
+- **Error Boundaries**: Advanced error handling with recovery options
+- **Progressive Loading**: Multi-stage loading with progress indicators
 - **Responsive Design**: Mobile-first approach with Tailwind CSS
-- **Testing**: Jest, React Testing Library, comprehensive test coverage
+- **Accessibility**: WCAG 2.1 compliant with screen reader support
+
+### Security & Validation
+- **Input Sanitization**: XSS and injection attack prevention
+- **Rate Limiting**: API rate limiting with Redis backend
+- **Security Headers**: Comprehensive security headers configuration
+- **CSRF Protection**: Cross-site request forgery prevention
+- **Password Security**: Advanced password strength validation
+- **Security Auditing**: Automated security vulnerability detection
+
+### Development & Testing
+- **Comprehensive Testing**: Jest, React Testing Library, MSW
+- **Test Utilities**: Custom testing utilities and mocks
 - **Code Quality**: ESLint, Prettier, Husky pre-commit hooks
+- **Type Safety**: Full TypeScript coverage with strict mode
+- **Error Reporting**: Advanced error tracking and reporting
 
 ## 🚀 Quick Start
 
@@ -68,6 +96,12 @@ A modern, high-performance platform for AR/VR content creators and developers. B
    # UploadThing
    UPLOADTHING_SECRET="your-uploadthing-secret"
    UPLOADTHING_APP_ID="your-uploadthing-app-id"
+   
+   # Redis (for caching and rate limiting)
+   REDIS_URL="redis://localhost:6379"
+   
+   # Performance Monitoring
+   NEXT_PUBLIC_APP_VERSION="1.0.0"
    ```
 
 4. **Set up the database**
@@ -141,12 +175,15 @@ arhub-bc/
 
 ## 🧪 Testing
 
-The project includes comprehensive testing setup:
+The project includes comprehensive testing setup with custom utilities, mocks, and extensive coverage.
 
-- **Jest**: Test runner
-- **React Testing Library**: Component testing
-- **MSW**: API mocking
-- **Coverage**: 70% minimum coverage requirement
+### Testing Stack
+
+- **Jest**: Test runner with custom configuration
+- **React Testing Library**: Component testing with accessibility focus
+- **MSW**: API mocking and service worker integration
+- **Custom Test Utilities**: Comprehensive testing helpers and mocks
+- **Coverage**: 80% minimum coverage requirement
 
 ### Running Tests
 
@@ -161,33 +198,115 @@ pnpm test:watch
 pnpm test:coverage
 
 # Run specific test file
-pnpm test components/Button.test.tsx
+pnpm test __tests__/upload-page.test.tsx
+
+# Run tests with verbose output
+pnpm test --verbose
+```
+
+### Test Utilities
+
+```typescript
+import { 
+  renderWithProviders, 
+  testData, 
+  mockFileUpload, 
+  asyncUtils,
+  a11yUtils,
+  formUtils 
+} from '@/lib/test-utils';
+
+// Render with providers
+renderWithProviders(<MyComponent />, {
+  router: { pathname: '/test' },
+  session: testData.user()
+});
+
+// Test data factories
+const user = testData.user({ name: 'Custom User' });
+const project = testData.project({ title: 'Test Project' });
+
+// File upload testing
+const file = mockFileUpload.createScriptFile('test.js', 1024);
+
+// Async utilities
+await asyncUtils.waitFor(100);
+await asyncUtils.waitForElement('.my-element');
+
+// Accessibility testing
+const element = a11yUtils.getByRole(container, 'button');
+expect(a11yUtils.isFocusable(element)).toBe(true);
+
+// Form testing
+formUtils.fillInput(input, 'test value');
+formUtils.submitForm(form);
 ```
 
 ### Test Structure
 
 ```
-tests/
-├── __mocks__/           # Mock files
+__tests__/
 ├── components/          # Component tests
 ├── lib/                # Utility tests
 ├── integration/        # Integration tests
 └── e2e/               # End-to-end tests
+
+lib/
+├── test-utils.tsx      # Custom testing utilities
+└── __mocks__/         # Mock implementations
+```
+
+### Writing Tests
+
+```typescript
+import { renderWithProviders, testData } from '@/lib/test-utils';
+import { MyComponent } from '@/components/MyComponent';
+
+describe('MyComponent', () => {
+  it('renders correctly', () => {
+    renderWithProviders(<MyComponent />);
+    expect(screen.getByText('Hello World')).toBeInTheDocument();
+  });
+
+  it('handles user interactions', async () => {
+    renderWithProviders(<MyComponent />);
+    
+    const button = screen.getByRole('button');
+    fireEvent.click(button);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Clicked!')).toBeInTheDocument();
+    });
+  });
+
+  it('is accessible', () => {
+    renderWithProviders(<MyComponent />);
+    
+    const button = screen.getByRole('button');
+    expect(button).toHaveAttribute('aria-label');
+  });
+});
 ```
 
 ## 📊 Performance Monitoring
 
-The project includes built-in performance monitoring:
+The project includes comprehensive performance monitoring with real-time tracking and optimization suggestions.
 
-- **Core Web Vitals**: LCP, FID, CLS tracking
-- **Bundle Analysis**: Webpack bundle analyzer
-- **Memory Usage**: Heap memory monitoring
-- **Performance Insights**: Automated optimization suggestions
+### Performance Dashboard
 
-### Performance Metrics
+Access the performance dashboard to monitor your application's health:
 
 ```typescript
-import { performanceMonitor } from '@/lib/performance';
+import { PerformanceDashboard } from '@/components/performance-dashboard';
+
+// Use in your admin or dashboard page
+<PerformanceDashboard />
+```
+
+### Core Web Vitals Tracking
+
+```typescript
+import { performanceMonitor, realTimeTracker } from '@/lib/performance';
 
 // Get performance score (0-100)
 const score = performanceMonitor.getPerformanceScore();
@@ -197,16 +316,198 @@ const metrics = performanceMonitor.getMetrics();
 
 // Get optimization insights
 const insights = performanceMonitor.getPerformanceInsights();
+
+// Track real-time metrics
+realTimeTracker.trackMetric('api-response-time', 150);
+const averageResponseTime = realTimeTracker.getAverageMetric('api-response-time');
+```
+
+### Performance Budgets
+
+```typescript
+import { checkPerformanceBudget, DEFAULT_BUDGET } from '@/lib/performance';
+
+const budget = {
+  lcp: 2500,  // ms
+  fid: 100,   // ms
+  cls: 0.1,   // score
+  tbt: 200,   // ms
+};
+
+const result = checkPerformanceBudget(metrics, budget);
+if (!result.passed) {
+  console.log('Budget violations:', result.violations);
+}
+```
+
+### Performance Utilities
+
+```typescript
+import { 
+  debounce, 
+  throttle, 
+  measurePerformance,
+  preloadImage,
+  lazyLoadImages 
+} from '@/lib/performance';
+
+// Debounce expensive operations
+const debouncedSearch = debounce(searchFunction, 300);
+
+// Throttle scroll events
+const throttledScroll = throttle(handleScroll, 100);
+
+// Measure function performance
+const result = measurePerformance('expensive-operation', () => {
+  // Your expensive operation
+});
+
+// Preload critical images
+await preloadImage('/critical-image.jpg');
+
+// Enable lazy loading
+lazyLoadImages();
+```
+
+## 🚀 Caching & Performance
+
+The project includes a comprehensive caching layer with Redis and in-memory caching for optimal performance.
+
+### Caching Features
+
+- **Multi-layer Caching**: Redis + in-memory caching
+- **Cache Invalidation**: Tag-based cache invalidation
+- **Performance Optimization**: Automatic cache warming and optimization
+- **API Response Caching**: Intelligent API response caching
+- **Static Asset Caching**: Optimized static asset delivery
+
+### Cache Usage
+
+```typescript
+import { cache, cacheUtils } from '@/lib/cache';
+
+// Basic caching
+await cache.set('user:123', userData, { ttl: 3600 });
+const user = await cache.get('user:123');
+
+// Cache with tags for invalidation
+await cache.set('project:456', projectData, { 
+  ttl: 1800, 
+  tags: ['projects', 'user:123'] 
+});
+
+// Invalidate by tags
+await cache.invalidateByTags(['projects']);
+
+// Cache API responses
+const data = await cacheUtils.cacheApiResponse(
+  'api:projects',
+  () => fetchProjects(),
+  { ttl: 300, tags: ['projects'] }
+);
+
+// Cache with automatic key generation
+const result = await cacheUtils.cacheWithKey(
+  '/api/projects',
+  () => fetchProjects(),
+  { userId: '123' },
+  { ttl: 600 }
+);
+```
+
+### Cache Decorators
+
+```typescript
+import { cached } from '@/lib/cache';
+
+class ProjectService {
+  @cached({ ttl: 300, tags: ['projects'] })
+  async getProject(id: string) {
+    // This method will be automatically cached
+    return await this.fetchProjectFromDB(id);
+  }
+}
+```
+
+### Cache Configuration
+
+```typescript
+// Environment variables
+REDIS_URL="redis://localhost:6379"
+
+// Cache options
+const cacheOptions = {
+  ttl: 3600,           // Time to live in seconds
+  tags: ['projects'],  // Cache tags for invalidation
+  compress: true,      // Compress large data
+  serialize: true      // Serialize complex objects
+};
 ```
 
 ## 🔒 Security Features
 
+### Authentication & Authorization
 - **Authentication**: JWT-based with NextAuth.js
 - **Authorization**: Role-based access control
-- **Input Validation**: Zod schema validation
-- **Rate Limiting**: API rate limiting
-- **CORS**: Configurable CORS policies
-- **Security Headers**: Helmet.js integration
+- **Session Management**: Secure session handling with CSRF protection
+
+### Input Validation & Sanitization
+- **Input Validation**: Zod schema validation with custom sanitization
+- **XSS Prevention**: HTML sanitization and CSP headers
+- **SQL Injection Protection**: Parameterized queries and input sanitization
+- **File Upload Security**: File type validation and size limits
+
+### Rate Limiting & Protection
+- **Rate Limiting**: Redis-backed API rate limiting
+- **CSRF Protection**: Cross-site request forgery prevention
+- **Security Headers**: Comprehensive security headers configuration
+- **Security Auditing**: Automated vulnerability detection
+
+### Security Utilities
+
+```typescript
+import { 
+  InputSanitizer, 
+  RateLimiter, 
+  PasswordSecurity,
+  withSecurity 
+} from '@/lib/security';
+
+// Sanitize user input
+const cleanHtml = InputSanitizer.sanitizeHtml(userInput);
+const cleanFileName = InputSanitizer.sanitizeFileName(fileName);
+
+// Rate limiting
+const rateLimiter = RateLimiter.getInstance();
+const result = await rateLimiter.checkLimit('user-123', 100, 60000);
+
+// Password security
+const strength = PasswordSecurity.checkStrength(password);
+const securePassword = PasswordSecurity.generatePassword(16);
+
+// Security middleware for API routes
+export default withSecurity(apiHandler);
+```
+
+### Security Configuration
+
+```typescript
+// Security headers configuration
+export const securityHeaders = {
+  csp: {
+    'default-src': ["'self'"],
+    'script-src': ["'self'", "'unsafe-inline'"],
+    'style-src': ["'self'", "'unsafe-inline'"],
+    // ... more CSP rules
+  },
+  headers: {
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
+    'Strict-Transport-Security': 'max-age=31536000',
+    // ... more security headers
+  }
+};
+```
 
 ## 🌐 API Documentation
 
@@ -242,20 +543,95 @@ export async function GET(request: Request) {
 
 ## 🎨 UI Components
 
-Built with a modern design system:
+Built with a modern design system featuring comprehensive loading states, error handling, and accessibility.
+
+### Core Components
 
 - **Radix UI**: Accessible component primitives
-- **Tailwind CSS**: Utility-first CSS framework
-- **Framer Motion**: Smooth animations
+- **Tailwind CSS**: Utility-first CSS framework with custom AR/VR themes
 - **Lucide Icons**: Beautiful icon set
+- **Skeleton Components**: Comprehensive loading states
+- **Error Boundaries**: Advanced error handling with recovery
+
+### Loading States & Skeletons
+
+```typescript
+import { 
+  Skeleton, 
+  SkeletonCard, 
+  SkeletonList, 
+  LoadingSpinner,
+  LoadingOverlay,
+  ProgressiveLoader 
+} from '@/components/ui/skeleton';
+
+// Basic skeleton
+<Skeleton className="h-4 w-3/4" />
+
+// Card skeleton
+<SkeletonCard />
+
+// List skeleton
+<SkeletonList items={5} />
+
+// Loading spinner
+<LoadingSpinner size="lg" />
+
+// Loading overlay
+<LoadingOverlay isLoading={loading} message="Processing...">
+  <YourContent />
+</LoadingOverlay>
+
+// Progressive loading
+<ProgressiveLoader 
+  stages={['Uploading', 'Processing', 'Complete']}
+  currentStage={1}
+/>
+```
+
+### Error Handling
+
+```typescript
+import { ErrorBoundary, withErrorBoundary } from '@/components/error-boundary';
+
+// Wrap components with error boundary
+<ErrorBoundary 
+  onError={(error, errorInfo) => {
+    // Custom error handling
+    console.error('Error caught:', error);
+  }}
+  resetKeys={[someKey]}
+>
+  <YourComponent />
+</ErrorBoundary>
+
+// HOC for error boundaries
+const SafeComponent = withErrorBoundary(YourComponent, {
+  fallback: <div>Something went wrong</div>
+});
+```
+
+### Performance Dashboard
+
+```typescript
+import { PerformanceDashboard } from '@/components/performance-dashboard';
+
+// Use in admin dashboard
+<PerformanceDashboard className="w-full" />
+```
 
 ### Component Usage
 
 ```typescript
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export function MyComponent() {
+export function MyComponent({ loading, data }) {
+  if (loading) {
+    return <Skeleton className="h-32 w-full" />;
+  }
+
   return (
     <Card>
       <CardHeader>

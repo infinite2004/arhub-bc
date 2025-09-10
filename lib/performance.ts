@@ -347,5 +347,172 @@ export function getMemoryUsage(): { used: number; total: number; limit: number }
   };
 }
 
-// Export singleton instance
+// Real-time performance tracking
+export class RealTimePerformanceTracker {
+  private metrics: Map<string, number[]> = new Map();
+  private maxSamples = 100;
+
+  public trackMetric(name: string, value: number) {
+    if (!this.metrics.has(name)) {
+      this.metrics.set(name, []);
+    }
+    
+    const samples = this.metrics.get(name)!;
+    samples.push(value);
+    
+    // Keep only the last N samples
+    if (samples.length > this.maxSamples) {
+      samples.shift();
+    }
+  }
+
+  public getAverageMetric(name: string): number {
+    const samples = this.metrics.get(name);
+    if (!samples || samples.length === 0) return 0;
+    
+    return samples.reduce((sum, value) => sum + value, 0) / samples.length;
+  }
+
+  public getMetricTrend(name: string): 'improving' | 'degrading' | 'stable' {
+    const samples = this.metrics.get(name);
+    if (!samples || samples.length < 10) return 'stable';
+    
+    const recent = samples.slice(-5);
+    const older = samples.slice(-10, -5);
+    
+    const recentAvg = recent.reduce((sum, value) => sum + value, 0) / recent.length;
+    const olderAvg = older.reduce((sum, value) => sum + value, 0) / older.length;
+    
+    const change = (recentAvg - olderAvg) / olderAvg;
+    
+    if (change > 0.1) return 'degrading';
+    if (change < -0.1) return 'improving';
+    return 'stable';
+  }
+
+  public getAllMetrics() {
+    const result: Record<string, { average: number; trend: string; samples: number }> = {};
+    
+    for (const [name, samples] of this.metrics) {
+      result[name] = {
+        average: this.getAverageMetric(name),
+        trend: this.getMetricTrend(name),
+        samples: samples.length
+      };
+    }
+    
+    return result;
+  }
+}
+
+// Performance budget monitoring
+export interface PerformanceBudget {
+  lcp: number; // ms
+  fid: number; // ms
+  cls: number; // score
+  tbt: number; // ms
+  bundleSize: number; // KB
+}
+
+export const DEFAULT_BUDGET: PerformanceBudget = {
+  lcp: 2500,
+  fid: 100,
+  cls: 0.1,
+  tbt: 200,
+  bundleSize: 500
+};
+
+export function checkPerformanceBudget(metrics: Partial<PerformanceMetrics>, budget: PerformanceBudget = DEFAULT_BUDGET): { passed: boolean; violations: string[] } {
+  const violations: string[] = [];
+  
+  if (metrics.largestContentfulPaint && metrics.largestContentfulPaint > budget.lcp) {
+    violations.push(`LCP: ${metrics.largestContentfulPaint.toFixed(0)}ms > ${budget.lcp}ms`);
+  }
+  
+  if (metrics.firstInputDelay && metrics.firstInputDelay > budget.fid) {
+    violations.push(`FID: ${metrics.firstInputDelay.toFixed(0)}ms > ${budget.fid}ms`);
+  }
+  
+  if (metrics.cumulativeLayoutShift && metrics.cumulativeLayoutShift > budget.cls) {
+    violations.push(`CLS: ${metrics.cumulativeLayoutShift.toFixed(3)} > ${budget.cls}`);
+  }
+  
+  if (metrics.totalBlockingTime && metrics.totalBlockingTime > budget.tbt) {
+    violations.push(`TBT: ${metrics.totalBlockingTime.toFixed(0)}ms > ${budget.tbt}ms`);
+  }
+  
+  return {
+    passed: violations.length === 0,
+    violations
+  };
+}
+
+// Performance reporting utilities
+export function reportToAnalytics(metrics: Partial<PerformanceMetrics>, customData?: Record<string, any>) {
+  if (typeof window === 'undefined') return;
+  
+  // Example: Send to Google Analytics
+  if (typeof gtag !== 'undefined') {
+    gtag('event', 'performance_metrics', {
+      event_category: 'Performance',
+      event_label: 'Core Web Vitals',
+      custom_map: {
+        lcp: metrics.largestContentfulPaint,
+        fid: metrics.firstInputDelay,
+        cls: metrics.cumulativeLayoutShift,
+        tbt: metrics.totalBlockingTime,
+        ...customData
+      }
+    });
+  }
+  
+  // Example: Send to custom analytics endpoint
+  fetch('/api/analytics/performance', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      metrics,
+      timestamp: new Date().toISOString(),
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      ...customData
+    })
+  }).catch(error => {
+    console.warn('Failed to report performance metrics:', error);
+  });
+}
+
+// Performance optimization suggestions
+export function getOptimizationSuggestions(metrics: Partial<PerformanceMetrics>): string[] {
+  const suggestions: string[] = [];
+  
+  if (metrics.largestContentfulPaint && metrics.largestContentfulPaint > 4000) {
+    suggestions.push('Optimize images: Use WebP format, implement lazy loading, and compress images');
+    suggestions.push('Reduce server response time: Use CDN, enable compression, optimize database queries');
+    suggestions.push('Eliminate render-blocking resources: Inline critical CSS, defer non-critical JavaScript');
+  }
+  
+  if (metrics.firstInputDelay && metrics.firstInputDelay > 300) {
+    suggestions.push('Break up long tasks: Split large JavaScript operations into smaller chunks');
+    suggestions.push('Optimize JavaScript: Remove unused code, use code splitting, minimize bundle size');
+    suggestions.push('Use Web Workers: Move heavy computations off the main thread');
+  }
+  
+  if (metrics.cumulativeLayoutShift && metrics.cumulativeLayoutShift > 0.25) {
+    suggestions.push('Set explicit dimensions: Add width and height attributes to images and videos');
+    suggestions.push('Reserve space: Use aspect-ratio CSS property or padding-bottom technique');
+    suggestions.push('Avoid dynamic content insertion: Pre-allocate space for dynamically loaded content');
+  }
+  
+  if (metrics.totalBlockingTime && metrics.totalBlockingTime > 600) {
+    suggestions.push('Code splitting: Split large bundles into smaller, more manageable chunks');
+    suggestions.push('Tree shaking: Remove unused code from your bundles');
+    suggestions.push('Lazy loading: Load non-critical JavaScript only when needed');
+  }
+  
+  return suggestions;
+}
+
+// Export singleton instances
 export const performanceMonitor = new PerformanceMonitor();
+export const realTimeTracker = new RealTimePerformanceTracker();

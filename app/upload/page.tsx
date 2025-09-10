@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { X, Upload, Plus, FileText, Package, Code, AlertCircle, CheckCircle, Loader2, Trash2 } from "lucide-react"
+import { X, Upload, Plus, FileText, Package, Code, AlertCircle, CheckCircle, Loader2, Trash2, Image, File, Eye, EyeOff } from "lucide-react"
 import { UploadButton } from "@/lib/uploadthing"
 import type { OurFileRouter } from "@/app/api/uploadthing/route"
 import { useRouter } from "next/navigation"
@@ -29,6 +29,10 @@ export default function UploadPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [uploadProgress, setUploadProgress] = useState<Record<string, string>>({})
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set())
+  const [dragActive, setDragActive] = useState(false)
+  const [previewMode, setPreviewMode] = useState(false)
+  const [filePreviews, setFilePreviews] = useState<Record<string, string>>({})
+  const dragRef = useRef<HTMLDivElement>(null)
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -179,6 +183,74 @@ export default function UploadPage() {
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  // Drag and drop handlers
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true)
+    } else if (e.type === "dragleave") {
+      setDragActive(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const files = Array.from(e.dataTransfer.files)
+      handleFiles(files)
+    }
+  }, [])
+
+  const handleFiles = (files: File[]) => {
+    files.forEach(file => {
+      // Validate file type and size
+      const maxSize = 100 * 1024 * 1024 // 100MB
+      if (file.size > maxSize) {
+        setErrors({ ...errors, files: `File ${file.name} is too large. Maximum size is 100MB.` })
+        return
+      }
+
+      // Determine file kind based on extension
+      const extension = file.name.split('.').pop()?.toLowerCase()
+      let kind = 'CONFIG'
+      
+      if (['glb', 'gltf', 'obj', 'fbx', 'dae'].includes(extension || '')) {
+        kind = 'MODEL'
+      } else if (['py', 'js', 'ts', 'jsx', 'tsx', 'cpp', 'c', 'java'].includes(extension || '')) {
+        kind = 'SCRIPT'
+      }
+
+      // Create preview for images
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          setFilePreviews(prev => ({ ...prev, [file.name]: e.target?.result as string }))
+        }
+        reader.readAsDataURL(file)
+      }
+
+      // Simulate file upload (in real app, this would upload to server)
+      const mockUpload = {
+        kind,
+        key: `mock-${Date.now()}-${file.name}`,
+        name: file.name,
+        type: file.type,
+        size: file.size
+      }
+      
+      setUploaded(prev => [...prev, mockUpload])
+      setUploadProgress(prev => ({ ...prev, [mockUpload.key]: "Uploaded successfully" }))
+    })
+  }
+
+  const togglePreviewMode = () => {
+    setPreviewMode(!previewMode)
   }
 
   const getFileIcon = (kind: string) => {
@@ -340,6 +412,37 @@ export default function UploadPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Drag and Drop Zone */}
+                  <div 
+                    ref={dragRef}
+                    className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                      dragActive 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                  >
+                    <div className="space-y-4">
+                      <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                        <Upload className="h-8 w-8 text-gray-400" />
+                      </div>
+                      <div>
+                        <p className="text-lg font-medium text-gray-900">
+                          Drag and drop files here
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          or click the upload buttons below
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                        <span>Supports: .glb, .gltf, .obj, .py, .js, .ts, .json, .yaml</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
                       <Package className="h-8 w-8 text-blue-500 mx-auto mb-3" />
@@ -390,42 +493,73 @@ export default function UploadPage() {
 
                   {uploaded.length > 0 && (
                     <div className="mt-6">
-                      <h3 className="text-lg font-medium mb-3">Uploaded Files ({uploaded.length})</h3>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-lg font-medium">Uploaded Files ({uploaded.length})</h3>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={togglePreviewMode}
+                          className="flex items-center gap-2"
+                        >
+                          {previewMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          {previewMode ? 'Hide Previews' : 'Show Previews'}
+                        </Button>
+                      </div>
                       <div className="space-y-3">
                         {uploaded.map((u, index) => (
-                          <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
-                            <div className="flex items-center flex-1">
-                              {getFileIcon(u.kind)}
-                              <div className="ml-3 flex-1">
-                                <p className="font-medium">{u.name}</p>
-                                <div className="flex items-center gap-4 text-sm text-gray-500">
-                                  <span>{getFileTypeLabel(u.kind)}</span>
-                                  <span>{formatFileSize(u.size)}</span>
+                          <div key={index} className="bg-gray-50 rounded-lg border overflow-hidden">
+                            <div className="flex items-center justify-between p-4">
+                              <div className="flex items-center flex-1">
+                                {getFileIcon(u.kind)}
+                                <div className="ml-3 flex-1">
+                                  <p className="font-medium">{u.name}</p>
+                                  <div className="flex items-center gap-4 text-sm text-gray-500">
+                                    <span>{getFileTypeLabel(u.kind)}</span>
+                                    <span>{formatFileSize(u.size)}</span>
+                                  </div>
                                 </div>
                               </div>
+                              <div className="flex items-center gap-3">
+                                {uploadingFiles.has(u.key) ? (
+                                  <div className="flex items-center gap-2 text-blue-600">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span className="text-sm">Uploading...</span>
+                                  </div>
+                                ) : uploadProgress[u.key] ? (
+                                  <span className="text-sm text-green-600 flex items-center gap-1">
+                                    <CheckCircle className="h-4 w-4" />
+                                    {uploadProgress[u.key]}
+                                  </span>
+                                ) : null}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRemoveFile(u.key)}
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              {uploadingFiles.has(u.key) ? (
-                                <div className="flex items-center gap-2 text-blue-600">
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  <span className="text-sm">Uploading...</span>
+                            
+                            {/* File Preview */}
+                            {previewMode && filePreviews[u.name] && (
+                              <div className="border-t bg-white p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Image className="h-4 w-4 text-gray-500" />
+                                  <span className="text-sm font-medium text-gray-700">Preview</span>
                                 </div>
-                              ) : uploadProgress[u.key] ? (
-                                <span className="text-sm text-green-600 flex items-center gap-1">
-                                  <CheckCircle className="h-4 w-4" />
-                                  {uploadProgress[u.key]}
-                                </span>
-                              ) : null}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveFile(u.key)}
-                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                                <div className="max-w-xs">
+                                  <img 
+                                    src={filePreviews[u.name]} 
+                                    alt={u.name}
+                                    className="rounded border max-h-32 object-contain"
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

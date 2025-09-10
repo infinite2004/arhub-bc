@@ -1,12 +1,14 @@
 import type React from "react"
 import "@/app/globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
+import { ThemeProvider, ThemeToggle } from "@/components/theme-provider"
 import AuthProvider from "@/components/auth-provider"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Upload, Search, Menu } from "lucide-react"
 import UserMenu from "@/components/user-menu"
 import { Suspense } from "react"
+import { PerformanceMonitor } from "@/components/performance-monitor"
+import { SearchBar } from "@/components/search-bar"
 
 export default function RootLayout({
   children,
@@ -39,12 +41,27 @@ export default function RootLayout({
                     </nav>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <div className="hidden md:block relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <input
-                        type="text"
+                    <div className="hidden md:block w-80">
+                      <SearchBar 
                         placeholder="Search projects..."
-                        className="pl-10 pr-4 py-2 border rounded-md w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        suggestions={["3D Models", "OpenCV Scripts", "AR Apps", "Tutorials"]}
+                        onSearch={(query) => {
+                          // Navigate to search results page
+                          const params = new URLSearchParams();
+                          if (query) params.set("q", query);
+                          const searchURL = params.toString() ? `/search?${params.toString()}` : "/search";
+                          window.location.href = searchURL;
+                        }}
+                        onFilter={(filters) => {
+                          // Navigate to search results page with filters
+                          const params = new URLSearchParams();
+                          if (filters.category) params.set("category", filters.category);
+                          if (filters.tags && filters.tags.length > 0) params.set("tags", filters.tags.join(","));
+                          if (filters.sortBy && filters.sortBy !== "relevance") params.set("sortBy", filters.sortBy);
+                          if (filters.dateRange && filters.dateRange !== "all") params.set("dateRange", filters.dateRange);
+                          const searchURL = params.toString() ? `/search?${params.toString()}` : "/search";
+                          window.location.href = searchURL;
+                        }}
                       />
                     </div>
                     <Link href="/upload">
@@ -53,6 +70,7 @@ export default function RootLayout({
                         Upload
                       </Button>
                     </Link>
+                    <ThemeToggle />
                     <Button variant="ghost" size="icon" className="md:hidden">
                       <Search className="h-5 w-5" />
                     </Button>
@@ -65,6 +83,7 @@ export default function RootLayout({
               </div>
             </header>
             <Suspense>{children}</Suspense>
+            <PerformanceMonitor showDetails={process.env.NODE_ENV === "development"} />
             <footer className="mt-auto border-t py-8">
               <div className="container mx-auto px-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
