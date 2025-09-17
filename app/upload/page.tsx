@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { X, Upload, Plus, FileText, Package, Code, AlertCircle, CheckCircle, Loader2, Trash2, Image, File, Eye, EyeOff } from "lucide-react"
+import { X, Upload, Plus, FileText, Package, Code, AlertCircle, CheckCircle, Loader2, Trash2, Image, File, Eye, EyeOff, Zap, Download, Info, FileImage, FileVideo, FileAudio, Archive } from "lucide-react"
 import { UploadButton } from "@/lib/uploadthing"
 import type { OurFileRouter } from "@/app/api/uploadthing/route"
 import { useRouter } from "next/navigation"
@@ -32,6 +32,8 @@ export default function UploadPage() {
   const [dragActive, setDragActive] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
   const [filePreviews, setFilePreviews] = useState<Record<string, string>>({})
+  const [uploadStats, setUploadStats] = useState({ totalSize: 0, fileCount: 0 })
+  const [dragCounter, setDragCounter] = useState(0)
   const dragRef = useRef<HTMLDivElement>(null)
 
   const validateForm = () => {
@@ -79,6 +81,7 @@ export default function UploadPage() {
   }
 
   const handleRemoveFile = (fileKey: string) => {
+    const fileToRemove = uploaded.find(f => f.key === fileKey)
     setUploaded(uploaded.filter(f => f.key !== fileKey))
     setUploadProgress(prev => {
       const newProgress = { ...prev }
@@ -86,6 +89,14 @@ export default function UploadPage() {
       return newProgress
     })
     setErrors({ ...errors, files: "" })
+    
+    // Update upload stats
+    if (fileToRemove) {
+      setUploadStats(prev => ({
+        totalSize: prev.totalSize - fileToRemove.size,
+        fileCount: prev.fileCount - 1
+      }))
+    }
   }
 
   const handleTabChange = (tab: string) => {
@@ -145,13 +156,14 @@ export default function UploadPage() {
   const handleFileUpload = (kind: string, res: any) => {
     const item = res?.[0]
     if (item) {
-      setUploaded((u) => [...u, { 
+      const newFile = { 
         kind, 
         key: item.key, 
         name: item.name, 
         type: item.type || "", 
         size: item.size || 0 
-      }])
+      }
+      setUploaded((u) => [...u, newFile])
       setUploadProgress(prev => ({ ...prev, [item.key]: "Uploaded successfully" }))
       setUploadingFiles(prev => {
         const newSet = new Set(prev)
@@ -159,6 +171,12 @@ export default function UploadPage() {
         return newSet
       })
       setErrors({ ...errors, files: "" })
+      
+      // Update upload stats
+      setUploadStats(prev => ({
+        totalSize: prev.totalSize + newFile.size,
+        fileCount: prev.fileCount + 1
+      }))
     }
   }
 
@@ -189,17 +207,24 @@ export default function UploadPage() {
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (e.type === "dragenter" || e.type === "dragover") {
+    if (e.type === "dragenter") {
+      setDragCounter(prev => prev + 1)
       setDragActive(true)
     } else if (e.type === "dragleave") {
-      setDragActive(false)
+      setDragCounter(prev => prev - 1)
+      if (dragCounter === 1) {
+        setDragActive(false)
+      }
+    } else if (e.type === "dragover") {
+      setDragActive(true)
     }
-  }, [])
+  }, [dragCounter])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
+    setDragCounter(0)
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const files = Array.from(e.dataTransfer.files)
@@ -207,22 +232,64 @@ export default function UploadPage() {
     }
   }, [])
 
-  const handleFiles = (files: File[]) => {
-    files.forEach(file => {
-      // Validate file type and size
-      const maxSize = 100 * 1024 * 1024 // 100MB
-      if (file.size > maxSize) {
-        setErrors({ ...errors, files: `File ${file.name} is too large. Maximum size is 100MB.` })
-        return
-      }
+  const validateFile = (file: File): { isValid: boolean; error?: string } => {
+    const maxSize = 100 * 1024 * 1024 // 100MB
+    const allowedExtensions = [
+      // 3D Models
+      'glb', 'gltf', 'obj', 'fbx', 'dae', 'blend', '3ds', 'ply', 'stl',
+      // Scripts
+      'py', 'js', 'ts', 'jsx', 'tsx', 'cpp', 'c', 'java', 'cs', 'php', 'rb', 'go', 'rs',
+      // Config files
+      'json', 'yaml', 'yml', 'xml', 'toml', 'ini', 'cfg', 'conf',
+      // Images
+      'jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp', 'tiff',
+      // Videos
+      'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv',
+      // Audio
+      'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a',
+      // Archives
+      'zip', 'rar', '7z', 'tar', 'gz', 'bz2',
+      // Documents
+      'pdf', 'doc', 'docx', 'txt', 'md', 'rtf'
+    ]
 
+    if (file.size > maxSize) {
+      return { isValid: false, error: `File ${file.name} is too large. Maximum size is 100MB.` }
+    }
+
+    const extension = file.name.split('.').pop()?.toLowerCase()
+    if (!extension || !allowedExtensions.includes(extension)) {
+      return { isValid: false, error: `File type .${extension} is not supported.` }
+    }
+
+    return { isValid: true }
+  }
+
+  const handleFiles = (files: File[]) => {
+    const validFiles: File[] = []
+    const errors: string[] = []
+
+    files.forEach(file => {
+      const validation = validateFile(file)
+      if (validation.isValid) {
+        validFiles.push(file)
+      } else {
+        errors.push(validation.error || 'Invalid file')
+      }
+    })
+
+    if (errors.length > 0) {
+      setErrors(prev => ({ ...prev, files: errors.join(', ') }))
+    }
+
+    validFiles.forEach(file => {
       // Determine file kind based on extension
       const extension = file.name.split('.').pop()?.toLowerCase()
       let kind = 'CONFIG'
       
-      if (['glb', 'gltf', 'obj', 'fbx', 'dae'].includes(extension || '')) {
+      if (['glb', 'gltf', 'obj', 'fbx', 'dae', 'blend', '3ds', 'ply', 'stl'].includes(extension || '')) {
         kind = 'MODEL'
-      } else if (['py', 'js', 'ts', 'jsx', 'tsx', 'cpp', 'c', 'java'].includes(extension || '')) {
+      } else if (['py', 'js', 'ts', 'jsx', 'tsx', 'cpp', 'c', 'java', 'cs', 'php', 'rb', 'go', 'rs'].includes(extension || '')) {
         kind = 'SCRIPT'
       }
 
@@ -246,6 +313,12 @@ export default function UploadPage() {
       
       setUploaded(prev => [...prev, mockUpload])
       setUploadProgress(prev => ({ ...prev, [mockUpload.key]: "Uploaded successfully" }))
+      
+      // Update upload stats
+      setUploadStats(prev => ({
+        totalSize: prev.totalSize + file.size,
+        fileCount: prev.fileCount + 1
+      }))
     })
   }
 
@@ -253,7 +326,12 @@ export default function UploadPage() {
     setPreviewMode(!previewMode)
   }
 
-  const getFileIcon = (kind: string) => {
+  const getFileIcon = (kind: string, fileType?: string) => {
+    if (fileType?.startsWith('image/')) return <FileImage className="h-5 w-5 text-pink-500" />
+    if (fileType?.startsWith('video/')) return <FileVideo className="h-5 w-5 text-red-500" />
+    if (fileType?.startsWith('audio/')) return <FileAudio className="h-5 w-5 text-yellow-500" />
+    if (fileType?.includes('zip') || fileType?.includes('rar') || fileType?.includes('7z')) return <Archive className="h-5 w-5 text-orange-500" />
+    
     switch (kind) {
       case "SCRIPT": return <Code className="h-5 w-5 text-purple-500" />
       case "MODEL": return <Package className="h-5 w-5 text-blue-500" />
@@ -412,40 +490,80 @@ export default function UploadPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Upload Statistics */}
+                  {uploadStats.fileCount > 0 && (
+                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <Zap className="h-5 w-5 text-blue-500" />
+                            <span className="font-medium text-gray-900">
+                              {uploadStats.fileCount} file{uploadStats.fileCount !== 1 ? 's' : ''} uploaded
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Download className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm text-gray-600">
+                              {formatFileSize(uploadStats.totalSize)} total
+                            </span>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                          Ready to submit
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Drag and Drop Zone */}
                   <div 
                     ref={dragRef}
-                    className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                    className={`relative border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 ${
                       dragActive 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'border-gray-300 hover:border-gray-400'
+                        ? 'border-blue-500 bg-blue-50 scale-[1.02] shadow-lg' 
+                        : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
                     }`}
                     onDragEnter={handleDrag}
                     onDragLeave={handleDrag}
                     onDragOver={handleDrag}
                     onDrop={handleDrop}
                   >
-                    <div className="space-y-4">
-                      <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                        <Upload className="h-8 w-8 text-gray-400" />
+                    <div className="space-y-6">
+                      <div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
+                        dragActive 
+                          ? 'bg-blue-100 scale-110' 
+                          : 'bg-gray-100'
+                      }`}>
+                        <Upload className={`h-10 w-10 transition-colors duration-200 ${
+                          dragActive ? 'text-blue-500' : 'text-gray-400'
+                        }`} />
                       </div>
                       <div>
-                        <p className="text-lg font-medium text-gray-900">
-                          Drag and drop files here
+                        <p className={`text-xl font-semibold transition-colors duration-200 ${
+                          dragActive ? 'text-blue-700' : 'text-gray-900'
+                        }`}>
+                          {dragActive ? 'Drop files here!' : 'Drag and drop files here'}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 mt-2">
                           or click the upload buttons below
                         </p>
                       </div>
-                      <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
-                        <span>Supports: .glb, .gltf, .obj, .py, .js, .ts, .json, .yaml</span>
+                      <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-gray-400">
+                        <span className="bg-gray-100 px-2 py-1 rounded">3D Models: .glb, .gltf, .obj</span>
+                        <span className="bg-gray-100 px-2 py-1 rounded">Scripts: .py, .js, .ts</span>
+                        <span className="bg-gray-100 px-2 py-1 rounded">Images: .jpg, .png, .svg</span>
+                        <span className="bg-gray-100 px-2 py-1 rounded">Docs: .pdf, .md, .txt</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                        <Info className="h-3 w-3" />
+                        <span>Maximum file size: 100MB per file</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
-                      <Package className="h-8 w-8 text-blue-500 mx-auto mb-3" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="border-2 border-dashed border-blue-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors group">
+                      <Package className="h-8 w-8 text-blue-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
                       <h3 className="font-medium mb-2">3D Models</h3>
                       <p className="text-sm text-gray-500 mb-3">Upload .glb, .gltf, .obj files</p>
                       <UploadButton<OurFileRouter>
@@ -457,8 +575,8 @@ export default function UploadPage() {
                       />
                     </div>
 
-                    <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center hover:border-purple-400 transition-colors">
-                      <Code className="h-8 w-8 text-purple-500 mx-auto mb-3" />
+                    <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center hover:border-purple-400 transition-colors group">
+                      <Code className="h-8 w-8 text-purple-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
                       <h3 className="font-medium mb-2">Scripts</h3>
                       <p className="text-sm text-gray-500 mb-3">Upload .py, .js, .ts files</p>
                       <UploadButton<OurFileRouter>
@@ -470,8 +588,8 @@ export default function UploadPage() {
                       />
                     </div>
 
-                    <div className="border-2 border-dashed border-green-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors">
-                      <FileText className="h-8 w-8 text-green-500 mx-auto mb-3" />
+                    <div className="border-2 border-dashed border-green-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors group">
+                      <FileText className="h-8 w-8 text-green-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
                       <h3 className="font-medium mb-2">Config Files</h3>
                       <p className="text-sm text-gray-500 mb-3">Upload .json, .yaml, .txt files</p>
                       <UploadButton<OurFileRouter>
@@ -481,6 +599,33 @@ export default function UploadPage() {
                         onUploadBegin={() => handleUploadBegin("config")}
                         className="w-full"
                       />
+                    </div>
+
+                    <div className="border-2 border-dashed border-orange-300 rounded-lg p-6 text-center hover:border-orange-400 transition-colors group">
+                      <Upload className="h-8 w-8 text-orange-500 mx-auto mb-3 group-hover:scale-110 transition-transform" />
+                      <h3 className="font-medium mb-2">Bulk Upload</h3>
+                      <p className="text-sm text-gray-500 mb-3">Upload multiple files at once</p>
+                      <input
+                        type="file"
+                        multiple
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            handleFiles(Array.from(e.target.files))
+                          }
+                        }}
+                        className="hidden"
+                        id="bulk-upload"
+                        accept=".glb,.gltf,.obj,.py,.js,.ts,.json,.yaml,.jpg,.jpeg,.png,.pdf,.md,.txt"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => document.getElementById('bulk-upload')?.click()}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Choose Files
+                      </Button>
                     </div>
                   </div>
 
@@ -511,12 +656,15 @@ export default function UploadPage() {
                           <div key={index} className="bg-gray-50 rounded-lg border overflow-hidden">
                             <div className="flex items-center justify-between p-4">
                               <div className="flex items-center flex-1">
-                                {getFileIcon(u.kind)}
+                                {getFileIcon(u.kind, u.type)}
                                 <div className="ml-3 flex-1">
                                   <p className="font-medium">{u.name}</p>
                                   <div className="flex items-center gap-4 text-sm text-gray-500">
                                     <span>{getFileTypeLabel(u.kind)}</span>
                                     <span>{formatFileSize(u.size)}</span>
+                                    <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                      {u.type || 'Unknown type'}
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -633,13 +781,16 @@ export default function UploadPage() {
                             {uploaded.map((u, index) => (
                               <div key={index} className="flex items-center justify-between p-3 bg-white rounded-md border">
                                 <div className="flex items-center">
-                                  {getFileIcon(u.kind)}
+                                  {getFileIcon(u.kind, u.type)}
                                   <div className="ml-3">
                                     <p className="font-medium">{u.name}</p>
                                     <p className="text-sm text-gray-500">{getFileTypeLabel(u.kind)} • {formatFileSize(u.size)}</p>
                                   </div>
                                 </div>
-                                <Badge variant="outline">{u.kind}</Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline">{u.kind}</Badge>
+                                  <span className="text-xs text-gray-400">{u.type}</span>
+                                </div>
                               </div>
                             ))}
                           </div>

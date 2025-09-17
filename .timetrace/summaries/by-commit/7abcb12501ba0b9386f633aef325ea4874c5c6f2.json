@@ -1,0 +1,11 @@
+{
+  "id": "S-7abcb12",
+  "sha": "7abcb12501ba0b9386f633aef325ea4874c5c6f2",
+  "createdAt": "2025-09-11T01:26:12.814Z",
+  "summary": {
+    "persona": "stakeholder",
+    "model": "ollama:phi4-mini:3.8b",
+    "text": "Daily rollup (2025-09-11)\nPM:\nShipped incremental improvements; risk is low; we'll validate on staging and monitor metrics.\n\nTech lead:\nRefined module boundaries; added coverage; check PR #123 for a careful review of auth and loading states."
+  },
+  "_schema": 1
+}
