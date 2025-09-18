@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { X, Upload, Plus, FileText, Package, Code, AlertCircle, CheckCircle, Loader2, Trash2, Image, File, Eye, EyeOff, Zap, Download, Info, FileImage, FileVideo, FileAudio, Archive } from "lucide-react"
+import { X, Upload, Plus, FileText, Package, Code, AlertCircle, CheckCircle, Loader2, Trash2, Image, File, Eye, EyeOff, Zap, Download, Info, FileImage, FileVideo, FileAudio, Archive, Play, Pause, RotateCcw, Maximize2, Minimize2, Copy, Share2, Star, Clock, User, Calendar } from "lucide-react"
 import { UploadButton } from "@/lib/uploadthing"
 import type { OurFileRouter } from "@/app/api/uploadthing/route"
 import { useRouter } from "next/navigation"
@@ -34,6 +34,11 @@ export default function UploadPage() {
   const [filePreviews, setFilePreviews] = useState<Record<string, string>>({})
   const [uploadStats, setUploadStats] = useState({ totalSize: 0, fileCount: 0 })
   const [dragCounter, setDragCounter] = useState(0)
+  const [uploadQueue, setUploadQueue] = useState<Array<{id: string, file: File, progress: number, status: 'pending' | 'uploading' | 'completed' | 'error'}>>([])
+  const [expandedPreview, setExpandedPreview] = useState<string | null>(null)
+  const [fileMetadata, setFileMetadata] = useState<Record<string, any>>({})
+  const [compressionEnabled, setCompressionEnabled] = useState(true)
+  const [compressionProgress, setCompressionProgress] = useState<Record<string, number>>({})
   const dragRef = useRef<HTMLDivElement>(null)
 
   const validateForm = () => {
@@ -203,6 +208,136 @@ export default function UploadPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
+  const extractFileMetadata = async (file: File) => {
+    const metadata: any = {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: new Date(file.lastModified),
+      extension: file.name.split('.').pop()?.toLowerCase()
+    }
+
+    // Extract additional metadata based on file type
+    if (file.type.startsWith('image/')) {
+      try {
+        const img = new window.Image()
+        const url = URL.createObjectURL(file)
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve()
+          img.onerror = () => reject(new Error('Failed to load image'))
+          img.src = url
+        })
+        metadata.dimensions = { width: img.width, height: img.height }
+        metadata.aspectRatio = (img.width / img.height).toFixed(2)
+        URL.revokeObjectURL(url)
+      } catch (e) {
+        console.warn('Could not extract image metadata:', e)
+      }
+    }
+
+    if (file.type.startsWith('video/')) {
+      try {
+        const video = document.createElement('video')
+        const url = URL.createObjectURL(file)
+        await new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => resolve()
+          video.onerror = () => reject(new Error('Failed to load video'))
+          video.src = url
+        })
+        metadata.dimensions = { width: video.videoWidth, height: video.videoHeight }
+        metadata.duration = video.duration
+        URL.revokeObjectURL(url)
+      } catch (e) {
+        console.warn('Could not extract video metadata:', e)
+      }
+    }
+
+    if (file.type.startsWith('audio/')) {
+      try {
+        const audio = document.createElement('audio')
+        const url = URL.createObjectURL(file)
+        await new Promise<void>((resolve, reject) => {
+          audio.onloadedmetadata = () => resolve()
+          audio.onerror = () => reject(new Error('Failed to load audio'))
+          audio.src = url
+        })
+        metadata.duration = audio.duration
+        URL.revokeObjectURL(url)
+      } catch (e) {
+        console.warn('Could not extract audio metadata:', e)
+      }
+    }
+
+    return metadata
+  }
+
+  const compressImage = async (file: File, quality: number = 0.8): Promise<File> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      const img = new window.Image()
+      
+      img.onload = () => {
+        canvas.width = img.width
+        canvas.height = img.height
+        ctx?.drawImage(img, 0, 0)
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new (File as any)([blob], file.name, { type: file.type })
+            resolve(compressedFile)
+          } else {
+            resolve(file)
+          }
+        }, file.type, quality)
+      }
+      
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
+  const processFile = async (file: File): Promise<File> => {
+    if (!compressionEnabled) return file
+    
+    // Only compress images
+    if (file.type.startsWith('image/') && file.size > 1024 * 1024) { // > 1MB
+      try {
+        const compressed = await compressImage(file, 0.8)
+        return compressed
+      } catch (e) {
+        console.warn('Compression failed, using original file:', e)
+        return file
+      }
+    }
+    
+    return file
+  }
+
+  const simulateUploadProgress = (fileId: string, file: File) => {
+    return new Promise<void>((resolve) => {
+      let progress = 0
+      const interval = setInterval(() => {
+        progress += Math.random() * 15
+        if (progress >= 100) {
+          progress = 100
+          clearInterval(interval)
+          setUploadQueue(prev => prev.map(item => 
+            item.id === fileId 
+              ? { ...item, progress: 100, status: 'completed' as const }
+              : item
+          ))
+          resolve()
+        } else {
+          setUploadQueue(prev => prev.map(item => 
+            item.id === fileId 
+              ? { ...item, progress, status: 'uploading' as const }
+              : item
+          ))
+        }
+      }, 200)
+    })
+  }
+
   // Drag and drop handlers
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -265,7 +400,7 @@ export default function UploadPage() {
     return { isValid: true }
   }
 
-  const handleFiles = (files: File[]) => {
+  const handleFiles = async (files: File[]) => {
     const validFiles: File[] = []
     const errors: string[] = []
 
@@ -282,7 +417,7 @@ export default function UploadPage() {
       setErrors(prev => ({ ...prev, files: errors.join(', ') }))
     }
 
-    validFiles.forEach(file => {
+    for (const file of validFiles) {
       // Determine file kind based on extension
       const extension = file.name.split('.').pop()?.toLowerCase()
       let kind = 'CONFIG'
@@ -293,33 +428,60 @@ export default function UploadPage() {
         kind = 'SCRIPT'
       }
 
-      // Create preview for images
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          setFilePreviews(prev => ({ ...prev, [file.name]: e.target?.result as string }))
-        }
-        reader.readAsDataURL(file)
+      const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
+      // Add to upload queue
+      setUploadQueue(prev => [...prev, {
+        id: fileId,
+        file,
+        progress: 0,
+        status: 'pending'
+      }])
+
+      // Process file (compression if enabled)
+      const processedFile = await processFile(file)
+      
+      // Extract metadata
+      try {
+        const metadata = await extractFileMetadata(processedFile)
+        setFileMetadata(prev => ({ ...prev, [fileId]: metadata }))
+      } catch (e) {
+        console.warn('Failed to extract metadata for', file.name)
       }
 
-      // Simulate file upload (in real app, this would upload to server)
+      // Create preview for images
+      if (processedFile.type.startsWith('image/')) {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          setFilePreviews(prev => ({ ...prev, [fileId]: e.target?.result as string }))
+        }
+        reader.readAsDataURL(processedFile)
+      }
+
+      // Simulate upload progress
+      await simulateUploadProgress(fileId, processedFile)
+
+      // Add to uploaded files after completion
       const mockUpload = {
         kind,
-        key: `mock-${Date.now()}-${file.name}`,
-        name: file.name,
-        type: file.type,
-        size: file.size
+        key: fileId,
+        name: processedFile.name,
+        type: processedFile.type,
+        size: processedFile.size
       }
       
       setUploaded(prev => [...prev, mockUpload])
-      setUploadProgress(prev => ({ ...prev, [mockUpload.key]: "Uploaded successfully" }))
+      setUploadProgress(prev => ({ ...prev, [fileId]: "Uploaded successfully" }))
       
       // Update upload stats
       setUploadStats(prev => ({
-        totalSize: prev.totalSize + file.size,
+        totalSize: prev.totalSize + processedFile.size,
         fileCount: prev.fileCount + 1
       }))
-    })
+
+      // Remove from upload queue
+      setUploadQueue(prev => prev.filter(item => item.id !== fileId))
+    }
   }
 
   const togglePreviewMode = () => {
@@ -490,6 +652,32 @@ export default function UploadPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  {/* Upload Settings */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <Zap className="h-5 w-5 text-gray-500" />
+                          <span className="font-medium text-gray-900">Upload Settings</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 text-sm text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={compressionEnabled}
+                              onChange={(e) => setCompressionEnabled(e.target.checked)}
+                              className="rounded border-gray-300"
+                            />
+                            Auto-compress images
+                          </label>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {compressionEnabled ? 'Images >1MB will be compressed' : 'No compression'}
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Upload Statistics */}
                   {uploadStats.fileCount > 0 && (
                     <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -527,6 +715,15 @@ export default function UploadPage() {
                     onDragLeave={handleDrag}
                     onDragOver={handleDrag}
                     onDrop={handleDrop}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Drag and drop files here or click to browse"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        document.getElementById('bulk-upload')?.click()
+                      }
+                    }}
                   >
                     <div className="space-y-6">
                       <div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
@@ -636,6 +833,41 @@ export default function UploadPage() {
                     </div>
                   )}
 
+                  {/* Upload Queue */}
+                  {uploadQueue.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="text-lg font-medium mb-3 flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-blue-500" />
+                        Upload Queue ({uploadQueue.length})
+                      </h3>
+                      <div className="space-y-3">
+                        {uploadQueue.map((item) => (
+                          <div key={item.id} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-3">
+                                {getFileIcon('CONFIG', item.file.type)}
+                                <div>
+                                  <p className="font-medium text-gray-900">{item.file.name}</p>
+                                  <p className="text-sm text-gray-500">{formatFileSize(item.file.size)}</p>
+                                </div>
+                              </div>
+                              <Badge variant={item.status === 'completed' ? 'default' : item.status === 'error' ? 'destructive' : 'secondary'}>
+                                {item.status}
+                              </Badge>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${item.progress}%` }}
+                              />
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">{Math.round(item.progress)}% complete</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {uploaded.length > 0 && (
                     <div className="mt-6">
                       <div className="flex items-center justify-between mb-3">
@@ -692,20 +924,147 @@ export default function UploadPage() {
                               </div>
                             </div>
                             
-                            {/* File Preview */}
-                            {previewMode && filePreviews[u.name] && (
+                            {/* Enhanced File Preview */}
+                            {previewMode && (
                               <div className="border-t bg-white p-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Image className="h-4 w-4 text-gray-500" />
-                                  <span className="text-sm font-medium text-gray-700">Preview</span>
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <Eye className="h-4 w-4 text-gray-500" />
+                                    <span className="text-sm font-medium text-gray-700">Preview & Details</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setExpandedPreview(expandedPreview === u.key ? null : u.key)}
+                                    >
+                                      {expandedPreview === u.key ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => navigator.clipboard.writeText(u.name)}
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div className="max-w-xs">
-                                  <img 
-                                    src={filePreviews[u.name]} 
-                                    alt={u.name}
-                                    className="rounded border max-h-32 object-contain"
-                                  />
-                                </div>
+
+                                {/* Image Preview */}
+                                {filePreviews[u.key] && u.type.startsWith('image/') && (
+                                  <div className={`${expandedPreview === u.key ? 'max-w-full' : 'max-w-xs'} mb-4`}>
+                                    <img 
+                                      src={filePreviews[u.key]} 
+                                      alt={u.name}
+                                      className="rounded border object-contain bg-gray-50"
+                                      style={{ 
+                                        maxHeight: expandedPreview === u.key ? '400px' : '128px',
+                                        width: 'auto'
+                                      }}
+                                    />
+                                  </div>
+                                )}
+
+                                {/* File Metadata */}
+                                {fileMetadata[u.key] && (
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <p className="font-medium text-gray-700 mb-2">File Information</p>
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-500">Size:</span>
+                                          <span>{formatFileSize(fileMetadata[u.key].size)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-500">Type:</span>
+                                          <span>{fileMetadata[u.key].type || 'Unknown'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-gray-500">Modified:</span>
+                                          <span>{fileMetadata[u.key].lastModified?.toLocaleDateString()}</span>
+                                        </div>
+                                        {fileMetadata[u.key].dimensions && (
+                                          <div className="flex justify-between">
+                                            <span className="text-gray-500">Dimensions:</span>
+                                            <span>{fileMetadata[u.key].dimensions.width} × {fileMetadata[u.key].dimensions.height}</span>
+                                          </div>
+                                        )}
+                                        {fileMetadata[u.key].duration && (
+                                          <div className="flex justify-between">
+                                            <span className="text-gray-500">Duration:</span>
+                                            <span>{Math.round(fileMetadata[u.key].duration)}s</span>
+                                          </div>
+                                        )}
+                                        {fileMetadata[u.key].aspectRatio && (
+                                          <div className="flex justify-between">
+                                            <span className="text-gray-500">Aspect Ratio:</span>
+                                            <span>{fileMetadata[u.key].aspectRatio}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <div>
+                                      <p className="font-medium text-gray-700 mb-2">Actions</p>
+                                      <div className="space-y-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="w-full justify-start"
+                                          onClick={() => {
+                                            const link = document.createElement('a')
+                                            link.href = filePreviews[u.key] || '#'
+                                            link.download = u.name
+                                            link.click()
+                                          }}
+                                        >
+                                          <Download className="h-4 w-4 mr-2" />
+                                          Download
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="w-full justify-start"
+                                          onClick={() => {
+                                            if (navigator.share) {
+                                              navigator.share({
+                                                title: u.name,
+                                                text: `Check out this file: ${u.name}`,
+                                                url: window.location.href
+                                              })
+                                            }
+                                          }}
+                                        >
+                                          <Share2 className="h-4 w-4 mr-2" />
+                                          Share
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Code Preview for Scripts */}
+                                {u.kind === 'SCRIPT' && u.type && (
+                                  <div className="mt-4">
+                                    <p className="text-sm font-medium text-gray-700 mb-2">Code Preview</p>
+                                    <div className="bg-gray-900 text-green-400 p-3 rounded text-xs font-mono overflow-x-auto">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Code className="h-3 w-3" />
+                                        <span>{u.name}</span>
+                                      </div>
+                                      <div className="text-gray-400">
+                                        {u.type.includes('javascript') ? '// JavaScript file' :
+                                         u.type.includes('python') ? '# Python file' :
+                                         u.type.includes('typescript') ? '// TypeScript file' :
+                                         '// Code file'} - Preview not available in demo
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
