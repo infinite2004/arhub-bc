@@ -40,10 +40,10 @@ export function SearchBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Debounced search function
+  // Debounced search function with better performance
   const debouncedSearch = debounce((searchQuery: string) => {
     onSearch?.(searchQuery);
-  }, 300);
+  }, 250);
 
   // Handle search input
   const handleSearch = (value: string) => {
@@ -113,7 +113,18 @@ export function SearchBar({
             setIsFocused(true);
             if (query.length > 0) setShowSuggestions(true);
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setShowSuggestions(false);
+              setShowFilterPanel(false);
+              inputRef.current?.blur();
+            }
+          }}
           placeholder={placeholder}
+          aria-label="Search projects"
+          aria-expanded={showSuggestions}
+          aria-haspopup="listbox"
+          role="combobox"
           className={cn(
             "pl-10 pr-20 h-12 text-base transition-all duration-200",
             isFocused && "ring-2 ring-blue-500 border-blue-500"

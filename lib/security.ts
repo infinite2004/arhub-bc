@@ -438,6 +438,22 @@ export class SecurityAudit {
   }
 }
 
+// Simple rate limiting function for API routes
+export async function rateLimit(
+  identifier: string,
+  action: string,
+  limit: number,
+  windowMs: number
+): Promise<boolean> {
+  const rateLimiter = RateLimiter.getInstance();
+  const result = await rateLimiter.checkLimit(
+    `${action}:${identifier}`,
+    limit,
+    windowMs
+  );
+  return result.allowed;
+}
+
 // Export utilities
 export { RateLimiter, InputSanitizer, PasswordSecurity, CSRFProtection, SecurityAudit };
 

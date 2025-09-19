@@ -17,24 +17,57 @@ model User {
   image     String?
   role      Role      @default(USER)
   plan      Plan      @default(FREE)
+  bio       String?   @db.Text
+  website   String?
+  github    String?
+  twitter   String?
+  location  String?
+  isActive  Boolean   @default(true)
+  lastLogin DateTime?
   projects  Project[]
+  downloads Download[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("users")
 }
 
 model Project {
   id          String      @id @default(cuid())
   title       String
-  description String
+  description String      @db.Text
+  slug        String      @unique
   ownerId     String
   owner       User        @relation(fields: [ownerId], references: [id])
   visibility  Visibility  @default(PUBLIC)
+  category    String?
   tags        ProjectTag[]
   assets      Asset[]
   downloads   Download[]
   stars       Int         @default(0)
+  views       Int         @default(0)
+  isFeatured  Boolean     @default(false)
+  isArchived  Boolean     @default(false)
+  readme      String?     @db.Text
+  license     String?
+  version     String      @default("1.0.0")
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+
+  @@index([ownerId])
+  @@index([visibility])
+  @@index([category])
+  @@index([isFeatured])
+  @@index([isArchived])
+  @@index([stars])
+  @@index([views])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@map("projects")
 }
 
 model Asset {
@@ -42,10 +75,19 @@ model Asset {
   projectId String
   project   Project   @relation(fields: [projectId], references: [id])
   kind      AssetKind
-  fileKey   String // S3 key
+  fileKey   String    // S3 key
   fileName  String
   mime      String
   sizeBytes Int
+  checksum  String?   // File integrity check
+  metadata  Json?     // Additional file metadata
+  isPrimary Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([projectId])
+  @@index([kind])
+  @@index([isPrimary])
+  @@map("assets")
 }
 
 model Download {
@@ -53,24 +95,43 @@ model Download {
   projectId String
   project   Project  @relation(fields: [projectId], references: [id])
   userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
   ipHash    String?
+  userAgent String?
+  referer   String?
   createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("downloads")
 }
 
 model Tag {
-  id       String       @id @default(cuid())
-  slug     String       @unique
-  name     String
-  projects ProjectTag[]
+  id        String       @id @default(cuid())
+  slug      String       @unique
+  name      String
+  color     String?      @default("#3B82F6")
+  projects  ProjectTag[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([slug])
+  @@index([name])
+  @@map("tags")
 }
 
 model ProjectTag {
   projectId String
   tagId     String
-  project   Project @relation(fields: [projectId], references: [id])
-  tag       Tag     @relation(fields: [tagId], references: [id])
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@id([projectId, tagId])
+  @@index([projectId])
+  @@index([tagId])
+  @@map("project_tags")
 }
 
 enum AssetKind {
@@ -88,6 +149,7 @@ enum Visibility {
 
 enum Role {
   USER
+  MODERATOR
   ADMIN
 }
 

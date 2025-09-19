@@ -32,13 +32,27 @@ export async function GET(request: NextRequest) {
       visibility: "PUBLIC",
     };
 
-    // Text search
+    // Enhanced text search with better relevance scoring
     if (query) {
-      where.OR = [
-        { title: { contains: query, mode: "insensitive" } },
-        { description: { contains: query, mode: "insensitive" } },
-        { tags: { some: { tag: { name: { contains: query, mode: "insensitive" } } } } },
-      ];
+      const searchTerms = query.trim().split(/\s+/).filter(term => term.length > 0);
+      
+      if (searchTerms.length === 1) {
+        // Single term search
+        where.OR = [
+          { title: { contains: query, mode: "insensitive" } },
+          { description: { contains: query, mode: "insensitive" } },
+          { tags: { some: { tag: { name: { contains: query, mode: "insensitive" } } } } },
+        ];
+      } else {
+        // Multi-term search - all terms must be found
+        where.AND = searchTerms.map(term => ({
+          OR: [
+            { title: { contains: term, mode: "insensitive" } },
+            { description: { contains: term, mode: "insensitive" } },
+            { tags: { some: { tag: { name: { contains: term, mode: "insensitive" } } } } },
+          ]
+        }));
+      }
     }
 
     // Category filter
@@ -131,28 +145,44 @@ export async function GET(request: NextRequest) {
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
 
-    // Get search suggestions for autocomplete
-    const suggestions = await prisma.project.findMany({
-      where: {
-        visibility: "PUBLIC",
-        OR: query ? [
-          { title: { contains: query, mode: "insensitive" } },
-          { description: { contains: query, mode: "insensitive" } },
-        ] : undefined,
-      },
-      select: {
-        title: true,
-        tags: { include: { tag: true } },
-      },
-      take: 5,
-    });
+    // Get enhanced search suggestions for autocomplete
+    const [suggestions, popularTags] = await Promise.all([
+      prisma.project.findMany({
+        where: {
+          visibility: "PUBLIC",
+          OR: query ? [
+            { title: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
+          ] : undefined,
+        },
+        select: {
+          title: true,
+          tags: { include: { tag: true } },
+        },
+        take: 8,
+        orderBy: { downloads: { _count: "desc" } },
+      }),
+      prisma.tag.findMany({
+        where: query ? {
+          name: { contains: query, mode: "insensitive" }
+        } : undefined,
+        include: {
+          _count: {
+            select: { projects: true }
+          }
+        },
+        orderBy: { projects: { _count: "desc" } },
+        take: 5,
+      })
+    ]);
 
     const searchSuggestions = [
       ...new Set([
         ...suggestions.map(p => p.title),
-        ...suggestions.flatMap(p => p.tags.map(t => t.tag.name))
+        ...suggestions.flatMap(p => p.tags.map(t => t.tag.name)),
+        ...popularTags.map(t => t.name)
       ])
-    ].slice(0, 8);
+    ].slice(0, 10);
 
     return NextResponse.json({
       success: true,
