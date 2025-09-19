@@ -39,6 +39,11 @@ export default function UploadPage() {
   const [fileMetadata, setFileMetadata] = useState<Record<string, any>>({})
   const [compressionEnabled, setCompressionEnabled] = useState(true)
   const [compressionProgress, setCompressionProgress] = useState<Record<string, number>>({})
+  const [uploadHistory, setUploadHistory] = useState<Array<{id: string, name: string, size: number, timestamp: Date, status: 'success' | 'error'}>>([])
+  const [autoSave, setAutoSave] = useState(true)
+  const [saveDraft, setSaveDraft] = useState(false)
+  const [uploadSpeed, setUploadSpeed] = useState<number>(0)
+  const [estimatedTime, setEstimatedTime] = useState<string>('')
   const dragRef = useRef<HTMLDivElement>(null)
 
   const validateForm = () => {
@@ -316,7 +321,19 @@ export default function UploadPage() {
   const simulateUploadProgress = (fileId: string, file: File) => {
     return new Promise<void>((resolve) => {
       let progress = 0
+      const startTime = Date.now()
+      const fileSize = file.size
+      
       const interval = setInterval(() => {
+        const elapsed = Date.now() - startTime
+        const speed = (progress / 100) * fileSize / (elapsed / 1000) // bytes per second
+        setUploadSpeed(speed)
+        
+        // Calculate estimated time remaining
+        const remainingBytes = ((100 - progress) / 100) * fileSize
+        const estimatedSeconds = remainingBytes / speed
+        setEstimatedTime(formatTime(estimatedSeconds))
+        
         progress += Math.random() * 15
         if (progress >= 100) {
           progress = 100
@@ -326,6 +343,16 @@ export default function UploadPage() {
               ? { ...item, progress: 100, status: 'completed' as const }
               : item
           ))
+          
+          // Add to upload history
+          setUploadHistory(prev => [...prev, {
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            timestamp: new Date(),
+            status: 'success'
+          }])
+          
           resolve()
         } else {
           setUploadQueue(prev => prev.map(item => 
@@ -336,6 +363,18 @@ export default function UploadPage() {
         }
       }, 200)
     })
+  }
+
+  const formatTime = (seconds: number): string => {
+    if (seconds < 60) return `${Math.round(seconds)}s`
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`
+    return `${Math.round(seconds / 3600)}h`
+  }
+
+  const formatSpeed = (bytesPerSecond: number): string => {
+    if (bytesPerSecond < 1024) return `${Math.round(bytesPerSecond)} B/s`
+    if (bytesPerSecond < 1024 * 1024) return `${Math.round(bytesPerSecond / 1024)} KB/s`
+    return `${Math.round(bytesPerSecond / (1024 * 1024))} MB/s`
   }
 
   // Drag and drop handlers
@@ -678,23 +717,74 @@ export default function UploadPage() {
                     </div>
                   </div>
 
-                  {/* Upload Statistics */}
+                  {/* Enhanced Upload Statistics */}
                   {uploadStats.fileCount > 0 && (
-                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mb-6">
-                      <div className="flex items-center justify-between">
+                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6 mb-6">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-blue-100 p-2 rounded-lg">
+                            <Zap className="h-5 w-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Files Uploaded</p>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {uploadStats.fileCount}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          <div className="bg-green-100 p-2 rounded-lg">
+                            <Download className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-600">Total Size</p>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {formatFileSize(uploadStats.totalSize)}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {uploadSpeed > 0 && (
+                          <div className="flex items-center gap-3">
+                            <div className="bg-purple-100 p-2 rounded-lg">
+                              <Clock className="h-5 w-5 text-purple-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Upload Speed</p>
+                              <p className="text-2xl font-bold text-gray-900">
+                                {formatSpeed(uploadSpeed)}
+                              </p>
+                              {estimatedTime && (
+                                <p className="text-xs text-gray-500">
+                                  ETA: {estimatedTime}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="mt-4 flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <Zap className="h-5 w-5 text-blue-500" />
-                            <span className="font-medium text-gray-900">
-                              {uploadStats.fileCount} file{uploadStats.fileCount !== 1 ? 's' : ''} uploaded
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Download className="h-4 w-4 text-gray-500" />
-                            <span className="text-sm text-gray-600">
-                              {formatFileSize(uploadStats.totalSize)} total
-                            </span>
-                          </div>
+                          <label className="flex items-center gap-2 text-sm text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={autoSave}
+                              onChange={(e) => setAutoSave(e.target.checked)}
+                              className="rounded border-gray-300"
+                            />
+                            Auto-save draft
+                          </label>
+                          <label className="flex items-center gap-2 text-sm text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={compressionEnabled}
+                              onChange={(e) => setCompressionEnabled(e.target.checked)}
+                              className="rounded border-gray-300"
+                            />
+                            Compress images
+                          </label>
                         </div>
                         <Badge variant="secondary" className="bg-blue-100 text-blue-700">
                           Ready to submit

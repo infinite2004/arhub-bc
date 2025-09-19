@@ -159,3 +159,81 @@ enum Plan {
   PRO
 }
 
+// Analytics and tracking models
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  name      String
+  properties Json
+  sessionId String
+  userId    String?
+  url       String?
+  timestamp DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  @@index([name])
+  @@index([sessionId])
+  @@index([userId])
+  @@index([timestamp])
+  @@map("analytics_events")
+}
+
+model PageView {
+  id    String @id @default(cuid())
+  path  String @unique
+  count Int    @default(1)
+
+  @@map("page_views")
+}
+
+model ProjectInteraction {
+  id        String @id @default(cuid())
+  projectId String
+  action    String
+  count     Int    @default(1)
+
+  @@unique([projectId, action])
+  @@index([projectId])
+  @@index([action])
+  @@map("project_interactions")
+}
+
+model SearchQuery {
+  id           String   @id @default(cuid())
+  query        String
+  resultsCount Int      @default(0)
+  timestamp    DateTime @default(now())
+
+  @@index([query])
+  @@index([timestamp])
+  @@map("search_queries")
+}
+
+model UploadStats {
+  id        String   @id @default(cuid())
+  fileName  String
+  fileSize  Int
+  fileType  String
+  success   Boolean
+  timestamp DateTime @default(now())
+
+  @@index([fileType])
+  @@index([success])
+  @@index([timestamp])
+  @@map("upload_stats")
+}
+
+model ErrorLog {
+  id        String   @id @default(cuid())
+  error     String
+  context   String
+  timestamp DateTime @default(now())
+  url       String?
+  userAgent String?
+
+  @@index([error])
+  @@index([context])
+  @@index([timestamp])
+  @@map("error_logs")
+}
+

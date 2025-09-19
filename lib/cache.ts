@@ -354,7 +354,7 @@ export function cached(options: CacheOptions = {}) {
   };
 }
 
-// Cache utilities for common use cases
+// Enhanced cache utilities with intelligent features
 export const cacheUtils = {
   // Generate cache key from URL and params
   generateKey: (url: string, params?: Record<string, any>): string => {
@@ -362,7 +362,7 @@ export const cacheUtils = {
     return `api:${url}:${paramString}`;
   },
 
-  // Cache API responses
+  // Cache API responses with intelligent TTL
   cacheApiResponse: async <T>(
     key: string, 
     fetcher: () => Promise<T>, 
@@ -387,6 +387,196 @@ export const cacheUtils = {
   ): Promise<T> => {
     const key = cacheUtils.generateKey(url, params);
     return cacheUtils.cacheApiResponse(key, fetcher, options);
+  },
+
+  // Intelligent cache with adaptive TTL
+  adaptiveCache: async <T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    baseTtl: number = 300,
+    options: CacheOptions = {}
+  ): Promise<T> => {
+    const cached = await cache.get<T>(key);
+    if (cached !== null) {
+      return cached;
+    }
+
+    try {
+      const data = await fetcher();
+      
+      // Adaptive TTL based on data size and type
+      let adaptiveTtl = baseTtl;
+      if (Array.isArray(data)) {
+        adaptiveTtl = Math.min(baseTtl * 2, 3600); // Longer TTL for lists
+      } else if (typeof data === 'object' && data !== null) {
+        const size = JSON.stringify(data).length;
+        if (size > 10000) {
+          adaptiveTtl = Math.min(baseTtl * 1.5, 1800); // Longer TTL for large objects
+        }
+      }
+
+      await cache.set(key, data, { ...options, ttl: adaptiveTtl });
+      return data;
+    } catch (error) {
+      // Cache error for shorter time to allow retry
+      await cache.set(key, null, { ...options, ttl: 60 });
+      throw error;
+    }
+  },
+
+  // Cache with background refresh
+  backgroundRefresh: async <T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    options: CacheOptions = {}
+  ): Promise<T> => {
+    const cached = await cache.get<T>(key);
+    
+    if (cached !== null) {
+      // Check if cache is near expiration (within 20% of TTL)
+      const entry = (cache as any).memoryCache.cache.get(key);
+      if (entry) {
+        const age = Date.now() - entry.timestamp;
+        const ttl = entry.ttl;
+        if (age > ttl * 0.8) {
+          // Background refresh
+          fetcher().then(data => {
+            cache.set(key, data, options);
+          }).catch(() => {
+            // Ignore background refresh errors
+          });
+        }
+      }
+      return cached;
+    }
+
+    const data = await fetcher();
+    await cache.set(key, data, options);
+    return data;
+  },
+
+  // Cache with stale-while-revalidate pattern
+  staleWhileRevalidate: async <T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    options: CacheOptions = {}
+  ): Promise<T> => {
+    const cached = await cache.get<T>(key);
+    
+    if (cached !== null) {
+      // Return stale data immediately
+      // Refresh in background
+      fetcher().then(data => {
+        cache.set(key, data, options);
+      }).catch(() => {
+        // Ignore background refresh errors
+      });
+      return cached;
+    }
+
+    // No cached data, fetch fresh
+    const data = await fetcher();
+    await cache.set(key, data, options);
+    return data;
+  },
+
+  // Cache with circuit breaker pattern
+  circuitBreaker: async <T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    options: CacheOptions = {}
+  ): Promise<T> => {
+    const errorKey = `${key}:error`;
+    const errorCount = await cache.get<number>(errorKey) || 0;
+    
+    if (errorCount >= 3) {
+      // Circuit breaker open, return cached data or throw
+      const cached = await cache.get<T>(key);
+      if (cached !== null) {
+        return cached;
+      }
+      throw new Error('Service temporarily unavailable');
+    }
+
+    try {
+      const data = await fetcher();
+      await cache.set(key, data, options);
+      // Reset error count on success
+      await cache.delete(errorKey);
+      return data;
+    } catch (error) {
+      // Increment error count
+      await cache.set(errorKey, errorCount + 1, { ttl: 300 });
+      throw error;
+    }
+  },
+
+  // Cache with compression for large data
+  compressedCache: async <T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    options: CacheOptions = {}
+  ): Promise<T> => {
+    const cached = await cache.get<T>(key);
+    if (cached !== null) {
+      return cached;
+    }
+
+    const data = await fetcher();
+    const dataSize = JSON.stringify(data).length;
+    
+    // Use compression for data larger than 1KB
+    const useCompression = dataSize > 1024;
+    
+    await cache.set(key, data, { 
+      ...options, 
+      compress: useCompression 
+    });
+    return data;
+  },
+
+  // Cache with tags for bulk invalidation
+  taggedCache: async <T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    tags: string[],
+    options: CacheOptions = {}
+  ): Promise<T> => {
+    const cached = await cache.get<T>(key);
+    if (cached !== null) {
+      return cached;
+    }
+
+    const data = await fetcher();
+    await cache.set(key, data, { 
+      ...options, 
+      tags: [...(options.tags || []), ...tags] 
+    });
+    return data;
+  },
+
+  // Cache with hit rate tracking
+  hitRateCache: async <T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    options: CacheOptions = {}
+  ): Promise<T> => {
+    const statsKey = `${key}:stats`;
+    const stats = await cache.get<{ hits: number; misses: number }>(statsKey) || { hits: 0, misses: 0 };
+    
+    const cached = await cache.get<T>(key);
+    if (cached !== null) {
+      stats.hits++;
+      await cache.set(statsKey, stats, { ttl: 86400 }); // Keep stats for 24 hours
+      return cached;
+    }
+
+    stats.misses++;
+    await cache.set(statsKey, stats, { ttl: 86400 });
+    
+    const data = await fetcher();
+    await cache.set(key, data, options);
+    return data;
   }
 };
 
