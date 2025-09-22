@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 
+const positiveIntFromString = z
+  .string()
+  .regex(/^\d+$/)
+  .transform((v) => Number(v))
+  .pipe(z.number().int().positive());
+
 const searchSchema = z.object({
-  q: z.string().optional(),
-  category: z.string().optional(),
-  tags: z.string().optional(),
+  q: z.string().max(200).optional(),
+  category: z.string().max(64).optional(),
+  tags: z.string().max(256).optional(),
   sortBy: z.enum(["relevance", "date", "popularity"]).optional(),
   dateRange: z.enum(["all", "week", "month", "year"]).optional(),
-  page: z.string().transform(Number).optional().default(1),
-  limit: z.string().transform(Number).optional().default(12),
+  page: positiveIntFromString.optional().default(1),
+  limit: positiveIntFromString.optional().default(12),
 });
 
 export async function GET(request: NextRequest) {
@@ -26,6 +32,10 @@ export async function GET(request: NextRequest) {
       page,
       limit,
     } = searchSchema.parse(params);
+
+    // Enforce sane pagination limits
+    const safeLimit = Math.min(Math.max(limit, 1), 50);
+    const safePage = Math.max(page, 1);
 
     // Build where clause
     const where: any = {
@@ -115,7 +125,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate pagination
-    const skip = (page - 1) * limit;
+    const skip = (safePage - 1) * safeLimit;
 
     // Execute search
     const [projects, totalCount] = await Promise.all([
@@ -135,15 +145,15 @@ export async function GET(request: NextRequest) {
         },
         orderBy,
         skip,
-        take: limit,
+        take: safeLimit,
       }),
       prisma.project.count({ where }),
     ]);
 
     // Calculate pagination info
-    const totalPages = Math.ceil(totalCount / limit);
-    const hasNextPage = page < totalPages;
-    const hasPrevPage = page > 1;
+    const totalPages = Math.max(1, Math.ceil(totalCount / safeLimit));
+    const hasNextPage = safePage < totalPages;
+    const hasPrevPage = safePage > 1;
 
     // Get enhanced search suggestions for autocomplete
     const [suggestions, popularTags] = await Promise.all([
@@ -189,8 +199,8 @@ export async function GET(request: NextRequest) {
       data: {
         projects,
         pagination: {
-          page,
-          limit,
+          page: safePage,
+          limit: safeLimit,
           totalCount,
           totalPages,
           hasNextPage,

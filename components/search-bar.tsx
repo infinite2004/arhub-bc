@@ -39,6 +39,7 @@ export function SearchBar({
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
 
   // Debounced search function with better performance
   const debouncedSearch = debounce((searchQuery: string) => {
@@ -55,6 +56,7 @@ export function SearchBar({
     } else {
       setShowSuggestions(false);
     }
+    setHighlightedIndex(-1);
   };
 
   // Handle filter changes
@@ -118,6 +120,31 @@ export function SearchBar({
               setShowSuggestions(false);
               setShowFilterPanel(false);
               inputRef.current?.blur();
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              if (!showSuggestions) {
+                setShowSuggestions(true);
+                setHighlightedIndex(0);
+              } else {
+                setHighlightedIndex((prev) => {
+                  const filtered = suggestions.filter(s => s.toLowerCase().includes(query.toLowerCase())).slice(0, 8);
+                  const next = Math.min((prev + 1), filtered.length - 1);
+                  return next < 0 ? 0 : next;
+                });
+              }
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              const filtered = suggestions.filter(s => s.toLowerCase().includes(query.toLowerCase())).slice(0, 8);
+              if (showSuggestions && highlightedIndex >= 0 && highlightedIndex < filtered.length) {
+                handleSuggestionClick(filtered[highlightedIndex]);
+              } else {
+                setShowSuggestions(false);
+                onSearch?.(query);
+                // Let parent navigate if desired
+              }
             }
           }}
           placeholder={placeholder}
@@ -125,6 +152,8 @@ export function SearchBar({
           aria-expanded={showSuggestions}
           aria-haspopup="listbox"
           role="combobox"
+          aria-autocomplete="list"
+          aria-controls="search-suggestion-list"
           className={cn(
             "pl-10 pr-20 h-12 text-base transition-all duration-200",
             isFocused && "ring-2 ring-blue-500 border-blue-500"
@@ -164,7 +193,7 @@ export function SearchBar({
 
       {/* Search Suggestions */}
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+        <div id="search-suggestion-list" role="listbox" className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
           {suggestions
             .filter(suggestion => 
               suggestion.toLowerCase().includes(query.toLowerCase())
@@ -174,7 +203,12 @@ export function SearchBar({
               <button
                 key={index}
                 onClick={() => handleSuggestionClick(suggestion)}
-                className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors first:rounded-t-md last:rounded-b-md"
+                role="option"
+                aria-selected={highlightedIndex === index}
+                className={cn(
+                  "w-full px-4 py-2 text-left transition-colors first:rounded-t-md last:rounded-b-md",
+                  highlightedIndex === index ? "bg-gray-100 dark:bg-gray-700" : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                )}
               >
                 <div className="flex items-center">
                   <Search className="h-4 w-4 text-gray-400 mr-3" />

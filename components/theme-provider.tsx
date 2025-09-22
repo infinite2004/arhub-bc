@@ -5,6 +5,7 @@ import {
   ThemeProvider as NextThemesProvider,
   type ThemeProviderProps,
 } from "next-themes";
+import { useTheme as useNextThemesHook } from "next-themes";
 import { createContext, useContext, useEffect, useState } from "react";
 import { Sun, Moon, Monitor } from "lucide-react";
 
@@ -64,7 +65,8 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 }
 
 function ThemeContextProvider({ children }: { children: React.ReactNode }) {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  // Use next-themes hook here; do NOT use our own context hook to avoid recursion
+  const { theme, setTheme, resolvedTheme } = useNextThemesHook();
   const [systemTheme, setSystemTheme] = useState<string>("light");
 
   useEffect(() => {
@@ -99,7 +101,7 @@ export function useTheme() {
 
 // Hook for accessing the raw next-themes hook
 export function useNextTheme() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useNextThemesHook();
   return { theme, setTheme, resolvedTheme };
 }
 

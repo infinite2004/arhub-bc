@@ -20,8 +20,8 @@ const nextConfig = {
       allowedOrigins: ['localhost:3000', 'yourdomain.com'],
     },
     
-    // Enable partial prerendering
-    ppr: true,
+    // Enable partial prerendering (disabled for stable Next.js)
+    // ppr: true,
     
     // Enable turbo
     turbo: {
